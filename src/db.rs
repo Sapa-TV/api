@@ -1,7 +1,21 @@
-use sqlx::SqlitePool;
+use dotenvy::dotenv;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
+use std::env;
+use std::str::FromStr;
 
 pub async fn create_db() -> Result<SqliteDb, sqlx::Error> {
-    let pool = SqlitePool::connect("sqlite:db/db.sqlite").await?;
+    dotenv().ok();
+
+    let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:db/db.sqlite".to_string());
+
+    println!("Connecting to database at {}", db_url);
+
+    let connection_options = SqliteConnectOptions::from_str(&db_url)?.create_if_missing(true);
+
+    let pool = SqlitePool::connect_with(connection_options).await?;
+
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
     Ok(SqliteDb::new(pool))
 }
 
