@@ -1,0 +1,108 @@
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Build release
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Generate openapi
+        run: cargo test -- --nocapture generate_openapi
+
+      - name: Get GitHub App token
+        id: get-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Deploy to VPS
+        uses: easingthemes/ssh-deploy@v6.0.0
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          REMOTE_HOST: ${{ secrets.HOST }}
+          REMOTE_USER: "deploy"
+          REMOTE_PORT: ${{ secrets.SSH_PORT }}
+          SOURCE: "target/x86_64-unknown-linux-gnu/release/api"
+          TARGET: "/opt/api/releases/${{ github.run_number }}/"
+          ARGS: "-rlgoDzvc"
+          EXCLUDE: ""
+
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_DEPLOY_KEY }}
+          known_hosts: unnecessary # можно пропустить, если использовать -o StrictHostKeyChecking=no
+          if_key_exists: replace
+
+      - name: Switch and restart
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} deploy@${{ secrets.HOST }} "            
+            rm -f /opt/api/current            
+            ln -s /opt/api/releases/${{ github.run_number }} /opt/api/current            
+            chmod +x /opt/api/current/api
+            sudo systemctl restart api
+          "
+
+      - name: Health check
+        run: |
+          for i in {1..10}; do
+            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Health check passed"
+              echo "RELEASE_SUCCESS=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+            echo "Waiting for API... attempt $i/10"
+            sleep 2
+          done
+          echo "Health check failed"
+          echo "RELEASE_SUCCESS=false" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Save successful release
+        if: success()
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} deploy@${{ secrets.HOST }} "
+            echo '${{ github.run_number }}' > /opt/api/.last_successful
+          "
+
+      - name: Rollback
+        if: failure() && steps.health.outputs.RELEASE_SUCCESS != 'true'
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} deploy@${{ secrets.HOST }} "
+            PREV=\$(cat /opt/api/.last_successful 2>/dev/null || echo '${{ github.run_number }}')
+            if [ -d /opt/api/releases/\$PREV ]; then
+              ln -sfn /opt/api/releases/\$PREV /opt/api/current
+              systemctl restart api
+              echo 'Rolled back to release \$PREV'
+            fi
+          "
+
+      - name: Update api-contracts
+        if: success()
+        run: |
+          git clone https://x-access-token:${{ steps.get-token.outputs.token }}@github.com/Sapa-TV/api-contracts.git /tmp/api-contracts
+          cp generated/openapi.json /tmp/api-contracts/openapi.json
+          cd /tmp/api-contracts
+          git config user.email "bot@sapa.tv"
+          git config user.name "API Bot"
+          git add openapi.json
+          git commit -m "Update openapi.json from ${{ github.sha }}"
+          git push
