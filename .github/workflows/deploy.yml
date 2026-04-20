@@ -18,6 +18,9 @@ jobs:
         with:
           targets: x86_64-unknown-linux-gnu
 
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
+
       - name: Build release
         run: cargo build --release --target x86_64-unknown-linux-gnu
         env:
@@ -45,48 +48,57 @@ jobs:
           ARGS: "-rlgoDzvc"
           EXCLUDE: ""
 
-      - name: Install SSH Key
-        uses: shimataro/ssh-key-action@v2
-        with:
-          key: ${{ secrets.SSH_DEPLOY_KEY }}
-          known_hosts: unnecessary # можно пропустить, если использовать -o StrictHostKeyChecking=no
-          if_key_exists: replace
+      - name: Setup SSH Access
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          cat >> ~/.ssh/config <<END
+          Host deploy-vps
+            HostName ${{ secrets.HOST }}
+            User deploy
+            Port ${{ secrets.SSH_PORT }}
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+          END
 
       - name: Switch and restart
         run: |
-          ssh -p ${{ secrets.SSH_PORT }} deploy@${{ secrets.HOST }} "            
-            rm -f /opt/api/current            
+          ssh deploy-vps "            
+            rm -f /opt/api/current
             ln -s /opt/api/releases/${{ github.run_number }} /opt/api/current            
             chmod +x /opt/api/current/api
             sudo systemctl restart api
           "
 
       - name: Health check
+        id: health
         run: |
-          for i in {1..10}; do
-            if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
-              echo "Health check passed"
-              echo "RELEASE_SUCCESS=true" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            echo "Waiting for API... attempt $i/10"
-            sleep 2
-          done
-          echo "Health check failed"
-          echo "RELEASE_SUCCESS=false" >> $GITHUB_OUTPUT
-          exit 1
+          ssh deploy-vps "
+            for i in {1..10}; do
+              if curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
+                echo 'Health check passed'
+                exit 0
+              fi
+              echo 'Waiting for API... attempt \$i/10'
+              sleep 2
+            done
+            echo 'Health check failed'
+            exit 1
+          " && echo "RELEASE_SUCCESS=true" >> $GITHUB_OUTPUT || (echo "RELEASE_SUCCESS=false" >> $GITHUB_OUTPUT && exit 1)
 
       - name: Save successful release
         if: success()
         run: |
-          ssh -p ${{ secrets.SSH_PORT }} deploy@${{ secrets.HOST }} "
+          ssh deploy-vps "
             echo '${{ github.run_number }}' > /opt/api/.last_successful
           "
 
       - name: Rollback
         if: failure() && steps.health.outputs.RELEASE_SUCCESS != 'true'
         run: |
-          ssh -p ${{ secrets.SSH_PORT }} deploy@${{ secrets.HOST }} "
+          ssh deploy-vps "
             PREV=\$(cat /opt/api/.last_successful 2>/dev/null || echo '${{ github.run_number }}')
             if [ -d /opt/api/releases/\$PREV ]; then
               ln -sfn /opt/api/releases/\$PREV /opt/api/current
