@@ -53,6 +53,25 @@ pub struct PushSubscriptionResponse {
     pub success: bool,
 }
 
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct HealthResponse {
+    pub status: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/health",
+    tag = "Health",
+    responses(
+        (status = 200, body = HealthResponse, description = "Health check")
+    )
+)]
+pub async fn health() -> axum::Json<HealthResponse> {
+    axum::Json(HealthResponse {
+        status: "ok".to_string(),
+    })
+}
+
 #[utoipa::path(
     get,
     path = "/api/king",
@@ -222,12 +241,13 @@ where
 #[derive(OpenApi)]
 #[openapi(
     tags(
+        (name = "Health", description = "Health check"),
         (name = "King", description = "King operations"),
         (name = "Donaters", description = "Donaters operations"),
         (name = "Push", description = "Web Push notifications")
     ),
-    paths(get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription),
-    components(schemas(KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys))
+    paths(health, get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription),
+    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys))
 )]
 #[allow(dead_code)]
 pub struct ApiDoc;
@@ -237,6 +257,7 @@ where
     T: Db + Clone + Send + Sync + 'static,
 {
     Router::new()
+        .route("/api/health", get(health))
         .route("/api/king", get(get_king).post(post_king::<T>))
         .route("/api/month", get(get_month).post(post_month::<T>))
         .route("/api/last-day", get(get_last_day).post(post_last_day::<T>))
