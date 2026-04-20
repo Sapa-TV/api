@@ -20,7 +20,10 @@ impl AppState {
     }
 }
 
-pub async fn create_state(db: &Arc<dyn Db>) -> Result<AppState, sqlx::Error> {
+pub async fn create_state<T: Db>(db: &T) -> Result<AppState, sqlx::Error>
+where
+    T: Db + Send + Sync,
+{
     let king = db.get_king().await?.unwrap_or_default();
     let last_day = db.get_last_day_donaters().await?;
     let month = db.get_month_donaters().await?;

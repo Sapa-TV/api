@@ -1,10 +1,8 @@
-use std::sync::Arc;
-
 use sqlx::SqlitePool;
 
-pub async fn create_db() -> Result<Arc<dyn Db>, sqlx::Error> {
+pub async fn create_db() -> Result<SqliteDb, sqlx::Error> {
     let pool = SqlitePool::connect("sqlite:db/db.sqlite").await?;
-    Ok(Arc::new(SqliteDb::new(pool)) as Arc<dyn Db>)
+    Ok(SqliteDb::new(pool))
 }
 
 pub async fn init_db(db: &dyn Db) -> Result<(), sqlx::Error> {
@@ -44,6 +42,14 @@ pub trait Db: Send + Sync {
 
 pub struct SqliteDb {
     pool: SqlitePool,
+}
+
+impl Clone for SqliteDb {
+    fn clone(&self) -> Self {
+        Self {
+            pool: self.pool.clone(),
+        }
+    }
 }
 
 impl SqliteDb {

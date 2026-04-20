@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use axum::{Json, Router, extract::Extension, routing::get, routing::post};
+use axum::{Json, Router, extract::Extension, extract::State, routing::get};
 use serde::{Deserialize, Serialize};
 use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
@@ -53,11 +51,14 @@ pub async fn get_king(Extension(state): Extension<AppState>) -> axum::Json<KingR
         (status = 200, body = KingResponse, description = "Update king")
     )
 )]
-pub async fn post_king(
+pub async fn post_king<T: Db>(
     Extension(state): Extension<AppState>,
-    Extension(db): Extension<Arc<dyn Db>>,
+    State(db): State<T>,
     Json(req): Json<KingRequest>,
-) -> axum::Json<KingResponse> {
+) -> axum::Json<KingResponse>
+where
+    T: Db + Send + Sync,
+{
     db.insert_king(&req.name).await.unwrap();
     let mut king = state.king.write().await;
     *king = req.name.clone();
@@ -88,11 +89,14 @@ pub async fn get_month(Extension(state): Extension<AppState>) -> axum::Json<Dona
         (status = 200, body = DonatersResponse, description = "Add month donater")
     )
 )]
-pub async fn post_month(
+pub async fn post_month<T: Db>(
     Extension(state): Extension<AppState>,
-    Extension(db): Extension<Arc<dyn Db>>,
+    State(db): State<T>,
     Json(req): Json<DonaterRequest>,
-) -> axum::Json<DonatersResponse> {
+) -> axum::Json<DonatersResponse>
+where
+    T: Db + Send + Sync,
+{
     db.insert_month_donater(&req.name).await.unwrap();
     let mut month = state.month.write().await;
     month.push(req.name.clone());
@@ -110,11 +114,14 @@ pub async fn post_month(
         (status = 200, body = DonatersResponse, description = "Add last day donater")
     )
 )]
-pub async fn post_last_day(
+pub async fn post_last_day<T: Db>(
     Extension(state): Extension<AppState>,
-    Extension(db): Extension<Arc<dyn Db>>,
+    State(db): State<T>,
     Json(req): Json<DonaterRequest>,
-) -> axum::Json<DonatersResponse> {
+) -> axum::Json<DonatersResponse>
+where
+    T: Db + Send + Sync,
+{
     db.insert_last_day_donater(&req.name).await.unwrap();
     let mut last_day = state.last_day.write().await;
     last_day.push(req.name.clone());
@@ -153,13 +160,16 @@ pub async fn get_last_day(Extension(state): Extension<AppState>) -> axum::Json<D
 #[allow(dead_code)]
 pub struct ApiDoc;
 
-pub fn router(state: AppState, db: Arc<dyn Db>) -> Router {
+pub fn router<T>(state: AppState, db: T) -> Router
+where
+    T: Db + Clone + Send + Sync + 'static,
+{
     Router::new()
-        .route("/api/king", get(get_king).post(post_king))
-        .route("/api/month", get(get_month).post(post_month))
-        .route("/api/last-day", get(get_last_day).post(post_last_day))
+        .route("/api/king", get(get_king).post(post_king::<T>))
+        .route("/api/month", get(get_month).post(post_month::<T>))
+        .route("/api/last-day", get(get_last_day).post(post_last_day::<T>))
         .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .layer(axum::Extension(state))
-        .layer(axum::Extension(db))
+        .with_state(db)
 }

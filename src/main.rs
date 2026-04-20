@@ -3,7 +3,6 @@ mod app_state;
 mod db;
 
 use std::net::SocketAddr;
-use std::sync::Arc;
 
 use api::router;
 use app_state::create_state;
@@ -12,11 +11,11 @@ use db::{create_db, init_db};
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = create_db().await?;
-    init_db(db.as_ref()).await?;
+    init_db(&db).await?;
 
     let state = create_state(&db).await?;
 
-    let app = router(state, db.clone());
+    let app = router(state, db);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     println!("===========================================");
