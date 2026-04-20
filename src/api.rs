@@ -1,4 +1,9 @@
-use axum::{Json, Router, extract::Extension, extract::State, routing::get};
+use axum::{
+    Json, Router,
+    extract::Extension,
+    extract::State,
+    routing::{delete, get, post},
+};
 use serde::{Deserialize, Serialize};
 use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
@@ -27,6 +32,25 @@ pub struct DonatersResponse {
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct DonaterRequest {
     pub name: String,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct PushKeys {
+    pub p256dh: String,
+    pub auth: String,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct PushSubscriptionRequest {
+    pub endpoint: String,
+    pub keys: PushKeys,
+    #[schema(example = json!(null))]
+    pub user_id: Option<String>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct PushSubscriptionResponse {
+    pub success: bool,
 }
 
 #[utoipa::path(
@@ -148,14 +172,62 @@ pub async fn get_last_day(Extension(state): Extension<AppState>) -> axum::Json<D
     })
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/push/subscription",
+    tag = "Push",
+    request_body = PushSubscriptionRequest,
+    responses(
+        (status = 200, body = PushSubscriptionResponse, description = "Save push subscription")
+    )
+)]
+pub async fn post_subscription<T: Db>(
+    State(db): State<T>,
+    Json(req): Json<PushSubscriptionRequest>,
+) -> axum::Json<PushSubscriptionResponse>
+where
+    T: Db + Send + Sync,
+{
+    db.insert_subscription(
+        &req.endpoint,
+        &req.keys.p256dh,
+        &req.keys.auth,
+        req.user_id.as_deref(),
+    )
+    .await
+    .unwrap();
+    axum::Json(PushSubscriptionResponse { success: true })
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/push/subscription",
+    tag = "Push",
+    request_body = PushSubscriptionRequest,
+    responses(
+        (status = 200, body = PushSubscriptionResponse, description = "Delete push subscription")
+    )
+)]
+pub async fn delete_subscription<T: Db>(
+    State(db): State<T>,
+    Json(req): Json<PushSubscriptionRequest>,
+) -> axum::Json<PushSubscriptionResponse>
+where
+    T: Db + Send + Sync,
+{
+    db.delete_subscription(&req.endpoint).await.unwrap();
+    axum::Json(PushSubscriptionResponse { success: true })
+}
+
 #[derive(OpenApi)]
 #[openapi(
     tags(
         (name = "King", description = "King operations"),
-        (name = "Donaters", description = "Donaters operations")
+        (name = "Donaters", description = "Donaters operations"),
+        (name = "Push", description = "Web Push notifications")
     ),
-    paths(get_king, post_king, get_month, post_month, get_last_day, post_last_day),
-    components(schemas(KingResponse, DonatersResponse, KingRequest, DonaterRequest))
+    paths(get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription),
+    components(schemas(KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys))
 )]
 #[allow(dead_code)]
 pub struct ApiDoc;
@@ -168,6 +240,10 @@ where
         .route("/api/king", get(get_king).post(post_king::<T>))
         .route("/api/month", get(get_month).post(post_month::<T>))
         .route("/api/last-day", get(get_last_day).post(post_last_day::<T>))
+        .route(
+            "/api/push/subscription",
+            post(post_subscription::<T>).delete(delete_subscription::<T>),
+        )
         .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .layer(axum::Extension(state))
