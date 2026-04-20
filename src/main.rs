@@ -1,21 +1,22 @@
 mod api;
 mod app_state;
+mod db;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use api::router;
-use app_state::{create_state, state_updater};
+use app_state::create_state;
+use db::{create_db, init_db};
 
 #[tokio::main]
-async fn main() {
-    let state = create_state().await;
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let db = create_db().await?;
+    init_db(db.as_ref()).await?;
 
-    let state_clone = state.clone();
-    tokio::spawn(async move {
-        state_updater(state_clone).await;
-    });
+    let state = create_state(&db).await?;
 
-    let app = router(state);
+    let app = router(state, db.clone());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     println!("===========================================");
@@ -27,6 +28,8 @@ async fn main() {
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -1,21 +1,34 @@
-use axum::{Router, extract::State, routing::get};
-use serde::Serialize;
+use std::sync::Arc;
+
+use axum::{Json, Router, extract::Extension, routing::get, routing::post};
+use serde::{Deserialize, Serialize};
 use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::app_state::AppState;
+use crate::db::Db;
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[schema(example = json!({"name": "Star"}))]
 pub struct KingResponse {
-    pub name: &'static str,
+    pub name: String,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct KingRequest {
+    pub name: String,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[schema(example = json!(["Star", "Echo"]))]
 pub struct DonatersResponse {
-    pub donaters: Vec<&'static str>,
+    pub donaters: Vec<String>,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct DonaterRequest {
+    pub name: String,
 }
 
 #[utoipa::path(
@@ -26,9 +39,29 @@ pub struct DonatersResponse {
         (status = 200, body = KingResponse, description = "Current king")
     )
 )]
-pub async fn get_king(State(state): State<AppState>) -> axum::Json<KingResponse> {
+pub async fn get_king(Extension(state): Extension<AppState>) -> axum::Json<KingResponse> {
     let king = state.king.read().await;
-    axum::Json(KingResponse { name: *king })
+    axum::Json(KingResponse { name: king.clone() })
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/king",
+    tag = "King",
+    request_body = KingRequest,
+    responses(
+        (status = 200, body = KingResponse, description = "Update king")
+    )
+)]
+pub async fn post_king(
+    Extension(state): Extension<AppState>,
+    Extension(db): Extension<Arc<dyn Db>>,
+    Json(req): Json<KingRequest>,
+) -> axum::Json<KingResponse> {
+    db.insert_king(&req.name).await.unwrap();
+    let mut king = state.king.write().await;
+    *king = req.name.clone();
+    axum::Json(KingResponse { name: req.name })
 }
 
 #[utoipa::path(
@@ -39,9 +72,57 @@ pub async fn get_king(State(state): State<AppState>) -> axum::Json<KingResponse>
         (status = 200, body = DonatersResponse, description = "Donaters for current month")
     )
 )]
-pub async fn get_month() -> axum::Json<DonatersResponse> {
+pub async fn get_month(Extension(state): Extension<AppState>) -> axum::Json<DonatersResponse> {
+    let month = state.month.read().await;
     axum::Json(DonatersResponse {
-        donaters: vec!["Star", "Echo", "Vortex", "Night Wolf", "Shadow Hunter"],
+        donaters: month.clone(),
+    })
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/month",
+    tag = "Donaters",
+    request_body = DonaterRequest,
+    responses(
+        (status = 200, body = DonatersResponse, description = "Add month donater")
+    )
+)]
+pub async fn post_month(
+    Extension(state): Extension<AppState>,
+    Extension(db): Extension<Arc<dyn Db>>,
+    Json(req): Json<DonaterRequest>,
+) -> axum::Json<DonatersResponse> {
+    db.insert_month_donater(&req.name).await.unwrap();
+    let mut month = state.month.write().await;
+    month.push(req.name.clone());
+    axum::Json(DonatersResponse {
+        donaters: month.clone(),
+    })
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/last-day",
+    tag = "Donaters",
+    request_body = DonaterRequest,
+    responses(
+        (status = 200, body = DonatersResponse, description = "Add last day donater")
+    )
+)]
+pub async fn post_last_day(
+    Extension(state): Extension<AppState>,
+    Extension(db): Extension<Arc<dyn Db>>,
+    Json(req): Json<DonaterRequest>,
+) -> axum::Json<DonatersResponse> {
+    db.insert_last_day_donater(&req.name).await.unwrap();
+    let mut last_day = state.last_day.write().await;
+    last_day.push(req.name.clone());
+    if last_day.len() > 10 {
+        last_day.remove(0);
+    }
+    axum::Json(DonatersResponse {
+        donaters: last_day.clone(),
     })
 }
 
@@ -53,7 +134,7 @@ pub async fn get_month() -> axum::Json<DonatersResponse> {
         (status = 200, body = DonatersResponse, description = "Donaters for last day")
     )
 )]
-pub async fn get_last_day(State(state): State<AppState>) -> axum::Json<DonatersResponse> {
+pub async fn get_last_day(Extension(state): Extension<AppState>) -> axum::Json<DonatersResponse> {
     let last_day = state.last_day.read().await;
     axum::Json(DonatersResponse {
         donaters: last_day.clone(),
@@ -66,18 +147,19 @@ pub async fn get_last_day(State(state): State<AppState>) -> axum::Json<DonatersR
         (name = "King", description = "King operations"),
         (name = "Donaters", description = "Donaters operations")
     ),
-    paths(get_king, get_month, get_last_day),
-    components(schemas(KingResponse, DonatersResponse))
+    paths(get_king, post_king, get_month, post_month, get_last_day, post_last_day),
+    components(schemas(KingResponse, DonatersResponse, KingRequest, DonaterRequest))
 )]
 #[allow(dead_code)]
 pub struct ApiDoc;
 
-pub fn router(state: AppState) -> Router {
+pub fn router(state: AppState, db: Arc<dyn Db>) -> Router {
     Router::new()
-        .route("/api/king", get(get_king))
-        .route("/api/month", get(get_month))
-        .route("/api/last-day", get(get_last_day))
+        .route("/api/king", get(get_king).post(post_king))
+        .route("/api/month", get(get_month).post(post_month))
+        .route("/api/last-day", get(get_last_day).post(post_last_day))
         .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
-        .with_state(state)
+        .layer(axum::Extension(state))
+        .layer(axum::Extension(db))
 }
