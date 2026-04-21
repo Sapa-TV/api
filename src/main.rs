@@ -41,7 +41,7 @@ mod tests {
     fn generate_openapi() {
         let path = Path::new("generated/openapi.json");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let json = super::api::ApiDoc::openapi().to_json().unwrap();
+        let json = super::api::ApiDoc::openapi().to_pretty_json().unwrap();
         fs::write(path, json).unwrap();
     }
 }

@@ -2,7 +2,7 @@ use axum::{
     Json, Router,
     extract::Extension,
     extract::State,
-    routing::{delete, get, post},
+    routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::OpenApi;
@@ -58,6 +58,11 @@ pub struct HealthResponse {
     pub status: String,
 }
 
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct VapidPublicKeyResponse {
+    pub key: String,
+}
+
 #[utoipa::path(
     get,
     path = "/api/health",
@@ -70,6 +75,19 @@ pub async fn health() -> axum::Json<HealthResponse> {
     axum::Json(HealthResponse {
         status: "ok".to_string(),
     })
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/push/vapid-public-key",
+    tag = "Push",
+    responses(
+        (status = 200, body = VapidPublicKeyResponse, description = "VAPID public key for push notifications")
+    )
+)]
+pub async fn get_vapid_public_key() -> axum::Json<VapidPublicKeyResponse> {
+    let key = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
+    axum::Json(VapidPublicKeyResponse { key })
 }
 
 #[utoipa::path(
@@ -246,8 +264,8 @@ where
         (name = "Donaters", description = "Donaters operations"),
         (name = "Push", description = "Web Push notifications")
     ),
-    paths(health, get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription),
-    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys))
+    paths(health, get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription, get_vapid_public_key),
+    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse))
 )]
 #[allow(dead_code)]
 pub struct ApiDoc;
@@ -265,6 +283,7 @@ where
             "/api/push/subscription",
             post(post_subscription::<T>).delete(delete_subscription::<T>),
         )
+        .route("/api/push/vapid-public-key", get(get_vapid_public_key))
         .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .layer(axum::Extension(state))
