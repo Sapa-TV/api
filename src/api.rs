@@ -56,6 +56,7 @@ pub struct PushSubscriptionResponse {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct HealthResponse {
     pub status: String,
+    pub version: String,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -85,6 +86,7 @@ pub struct PushTestResponse {
 pub async fn health() -> axum::Json<HealthResponse> {
     axum::Json(HealthResponse {
         status: "ok".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }
 
@@ -125,7 +127,9 @@ where
         None => return axum::Json(PushTestResponse { sent: 0 }),
     };
 
-    let sent = client.send_to_all(&subscriptions, &req.title, &req.body).await;
+    let sent = client
+        .send_to_all(&subscriptions, &req.title, &req.body)
+        .await;
 
     axum::Json(PushTestResponse { sent })
 }
@@ -305,7 +309,12 @@ where
         (name = "Push", description = "Web Push notifications")
     ),
     paths(health, get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription, get_vapid_public_key, test_push_all),
-    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse, PushTestRequest, PushTestResponse))
+    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse, PushTestRequest, PushTestResponse)),
+    info(
+        title = "api",
+        version = "v0",
+        description = "API for sapa-tv.ru"
+    )
 )]
 #[allow(dead_code)]
 pub struct ApiDoc;

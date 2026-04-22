@@ -27,7 +27,13 @@ impl PushClient {
             .build()
             .ok()?;
 
-        Some(Self { client, key_pair, contact: contact.to_string() })
+        tracing::info!("PushClient initialized with contact: {}", contact);
+
+        Some(Self {
+            client,
+            key_pair,
+            contact: contact.to_string(),
+        })
     }
 
     pub async fn send_to_all(
@@ -36,6 +42,13 @@ impl PushClient {
         title: &str,
         body: &str,
     ) -> u32 {
+        tracing::info!(
+            "Sending push to {} subscribers: title='{}', body='{}'",
+            subscriptions.len(),
+            title,
+            body
+        );
+
         let payload = format!(
             r#"{{"title":"{}","body":"{}","icon":"/icon.png"}}"#,
             title, body
@@ -45,22 +58,34 @@ impl PushClient {
         for sub in subscriptions {
             let endpoint = match sub.endpoint.parse() {
                 Ok(e) => e,
-                Err(_) => continue,
+                Err(_) => {
+                    tracing::warn!("Failed to parse endpoint for subscription");
+                    continue;
+                }
             };
 
             let p256dh = match Base64UrlUnpadded::decode_vec(&sub.p256dh) {
                 Ok(k) => k,
-                Err(_) => continue,
+                Err(_) => {
+                    tracing::warn!("Failed to decode p256dh for subscription");
+                    continue;
+                }
             };
 
             let auth = match Base64UrlUnpadded::decode_vec(&sub.auth) {
                 Ok(a) => a,
-                Err(_) => continue,
+                Err(_) => {
+                    tracing::warn!("Failed to decode auth for subscription");
+                    continue;
+                }
             };
 
             let public_key = match PublicKey::from_sec1_bytes(&p256dh) {
                 Ok(k) => k,
-                Err(_) => continue,
+                Err(_) => {
+                    tracing::warn!("Failed to create public key for subscription");
+                    continue;
+                }
             };
 
             let builder = WebPushBuilder::new(endpoint, public_key, Auth::clone_from_slice(&auth));
@@ -74,19 +99,44 @@ impl PushClient {
                 let headers = req.headers().clone();
                 let body = req.into_body();
 
-                if self
+                match self
                     .client
                     .request(method, &uri)
                     .headers(headers)
                     .body(body)
                     .send()
                     .await
-                    .is_ok()
                 {
-                    sent += 1;
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            tracing::info!(
+                                "Push sent successfully to user_id={:?}, endpoint status={}",
+                                sub.user_id,
+                                response.status()
+                            );
+                            sent += 1;
+                        } else {
+                            tracing::warn!(
+                                "Push failed to user_id={:?}, endpoint status={}",
+                                sub.user_id,
+                                response.status()
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Push request error for user_id={:?}: {}", sub.user_id, e);
+                    }
                 }
+            } else {
+                tracing::warn!("Failed to build push request for user_id={:?}", sub.user_id);
             }
         }
+
+        tracing::info!(
+            "Push completed: {}/{} sent successfully",
+            sent,
+            subscriptions.len()
+        );
 
         sent
     }
