@@ -1,52 +1,21 @@
-name: Deploy API
+name: Deploy API to VPS
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Download API package
+        uses: actions/download-artifact@v4
         with:
-          targets: x86_64-unknown-linux-gnu
-
-      - name: Rust Cache
-        uses: swatinem/rust-cache@v2
-
-      - name: Build release
-        run: cargo build --release --target x86_64-unknown-linux-gnu
-        env:
-          RUST_BACKTRACE: 1
-
-      - name: Generate openapi
-        run: cargo test -- --nocapture generate_openapi
-
-      - name: Get GitHub App token
-        id: get-token
-        uses: tibdex/github-app-token@v2
-        with:
-          app_id: ${{ secrets.APP_ID }}
-          private_key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - name: Deploy to VPS
-        uses: easingthemes/ssh-deploy@v6.0.0
-        with:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
-          REMOTE_HOST: ${{ secrets.HOST }}
-          REMOTE_USER: "deploy"
-          REMOTE_PORT: ${{ secrets.SSH_PORT }}
-          SOURCE: "target/x86_64-unknown-linux-gnu/release/api"
-          TARGET: "/opt/api/releases/${{ github.run_number }}/"
-          ARGS: "-rlgoDzvc"
-          EXCLUDE: ""
+          name: api-package
 
       - name: Setup SSH Access
         run: |
@@ -62,6 +31,18 @@ jobs:
             IdentityFile ~/.ssh/deploy_key
             StrictHostKeyChecking no
           END
+
+      - name: Deploy to VPS
+        uses: easingthemes/ssh-deploy@v6.0.0
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          REMOTE_HOST: ${{ secrets.HOST }}
+          REMOTE_USER: "deploy"
+          REMOTE_PORT: ${{ secrets.SSH_PORT }}
+          SOURCE: "api"
+          TARGET: "/opt/api/releases/${{ github.run_number }}/"
+          ARGS: "-rlgoDzvc"
+          EXCLUDE: ""
 
       - name: Switch and restart
         run: |
@@ -106,15 +87,3 @@ jobs:
               echo 'Rolled back to release \$PREV'
             fi
           "
-
-      - name: Update api-contracts
-        if: success()
-        run: |
-          git clone https://x-access-token:${{ steps.get-token.outputs.token }}@github.com/Sapa-TV/api-contracts.git /tmp/api-contracts
-          cp generated/openapi.json /tmp/api-contracts/openapi.json
-          cd /tmp/api-contracts
-          git config user.email "bot@sapa.tv"
-          git config user.name "API Bot"
-          git add openapi.json
-          git commit -m "Update openapi.json from ${{ github.sha }}"
-          git push

@@ -1,0 +1,49 @@
+name: Update api-contracts
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get GitHub App token
+        id: get-token
+        uses: tibdex/github-app-token@v2
+        with:
+          app_id: ${{ secrets.APP_ID }}
+          private_key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout api-contracts
+        uses: actions/checkout@v4
+        with:
+          repository: Sapa-TV/api-contracts
+          token: ${{ steps.get-token.outputs.token }}
+          path: api-contracts
+
+      - name: Download openapi.json
+        uses: actions/download-artifact@v4
+        with:
+          name: api-package
+          path: artifacts
+
+      - name: Update and Push
+        run: |
+          cp artifacts/openapi.json api-contracts/openapi.json
+          cd api-contracts
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add openapi.json          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Update openapi.json from ${GITHUB_REPOSITORY} v: ${{ inputs.version }} (hash:${GITHUB_SHA::7})"
+          git push

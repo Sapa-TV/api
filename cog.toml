@@ -2,9 +2,7 @@ branch_whitelist = ["main"]
 ignore_merge_commits = true
 tag_prefix = ""
 
-pre_bump_hooks = [
-    "cargo set-version {{version}}"
-]
+pre_bump_hooks = ["cargo set-version {{version}}"]
 
 [changelog]
 path = "CHANGELOG.md"
@@ -17,3 +15,5 @@ owner = "Sapa-TV"
 build = { omit_from_changelog = true }
 chore = { omit_from_changelog = true }
 test = { omit_from_changelog = true }
+ci = { omit_from_changelog = true }
+style = { omit_from_changelog = true }

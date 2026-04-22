@@ -1,0 +1,43 @@
+name: Build
+
+on:
+  workflow_call:
+    outputs:
+      artifact-name:
+        description: "API for sapa-tv.ru"
+        value: api-package
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+      - uses: swatinem/rust-cache@v2
+
+      - name: Build Release
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Generate openapi.json
+        run: cargo test --release --target x86_64-unknown-linux-gnu -- --nocapture generate_openapi
+
+      - name: Prepare artifacts
+        run: |
+          mkdir dist
+          cp target/x86_64-unknown-linux-gnu/release/api dist/
+          cp generated/openapi.json dist/
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-package
+          path: dist/
+          retention-days: 1
