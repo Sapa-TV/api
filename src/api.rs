@@ -63,6 +63,17 @@ pub struct VapidPublicKeyResponse {
     pub key: String,
 }
 
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct PushTestRequest {
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct PushTestResponse {
+    pub sent: u32,
+}
+
 #[utoipa::path(
     get,
     path = "/api/health",
@@ -88,6 +99,35 @@ pub async fn health() -> axum::Json<HealthResponse> {
 pub async fn get_vapid_public_key() -> axum::Json<VapidPublicKeyResponse> {
     let key = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
     axum::Json(VapidPublicKeyResponse { key })
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/push/test-all",
+    tag = "Push",
+    request_body = PushTestRequest,
+    responses(
+        (status = 200, body = PushTestResponse, description = "Send test push to all subscriptions")
+    )
+)]
+pub async fn test_push_all<T: Db>(
+    State(db): State<T>,
+    Json(req): Json<PushTestRequest>,
+) -> axum::Json<PushTestResponse>
+where
+    T: Db + Send + Sync,
+{
+    use crate::push::PushClient;
+
+    let subscriptions = db.get_all_subscriptions().await.unwrap_or_default();
+    let client = match PushClient::from_env() {
+        Some(c) => c,
+        None => return axum::Json(PushTestResponse { sent: 0 }),
+    };
+
+    let sent = client.send_to_all(&subscriptions, &req.title, &req.body).await;
+
+    axum::Json(PushTestResponse { sent })
 }
 
 #[utoipa::path(
@@ -264,8 +304,8 @@ where
         (name = "Donaters", description = "Donaters operations"),
         (name = "Push", description = "Web Push notifications")
     ),
-    paths(health, get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription, get_vapid_public_key),
-    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse))
+    paths(health, get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription, get_vapid_public_key, test_push_all),
+    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse, PushTestRequest, PushTestResponse))
 )]
 #[allow(dead_code)]
 pub struct ApiDoc;
@@ -284,6 +324,7 @@ where
             post(post_subscription::<T>).delete(delete_subscription::<T>),
         )
         .route("/api/push/vapid-public-key", get(get_vapid_public_key))
+        .route("/api/push/test-all", post(test_push_all::<T>))
         .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .layer(axum::Extension(state))
