@@ -4,7 +4,7 @@ use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use twitch_api::eventsub::event::websocket::EventsubWebsocketData;
+use twitch_api::eventsub::{Event, EventsubWebsocketData};
 
 use crate::error::AppError;
 use crate::twitch::auth::UserTokenManager;
@@ -60,7 +60,14 @@ impl EventSubClient {
                 msg = read.next() => {
                     match msg {
                         Some(Ok(Message::Text(text))) => {
-                            self.handle_message(&text, &mut session_id, &mut write).await?;
+                            let parsed = match Event::parse_websocket(&text) {
+                                Ok(p) => p,
+                                Err(e) => {
+                                    tracing::error!("Failed to parse EventSub message: {}. Raw: {}", e, text);
+                                    continue;
+                                }
+                            };
+                            self.handle_message_impl(parsed, &mut session_id, &mut write).await?;
                         }
                         Some(Ok(Message::Ping(data))) => {
                             tracing::debug!("Received ping, sending pong");
@@ -99,9 +106,9 @@ impl EventSubClient {
         Ok(())
     }
 
-    async fn handle_message<S>(
+    async fn handle_message_impl<S>(
         &self,
-        text: &str,
+        parsed: EventsubWebsocketData<'_>,
         session_id: &mut Option<String>,
         _write: &mut S,
     ) -> Result<(), AppError>
@@ -109,9 +116,6 @@ impl EventSubClient {
         S: Sink<Message> + Unpin,
         S::Error: std::fmt::Debug,
     {
-        let parsed: EventsubWebsocketData = serde_json::from_str(text)
-            .map_err(|e| AppError::Internal(format!("Failed to parse message: {}", e)))?;
-
         tracing::debug!("EventSub message type: {:?}", parsed);
 
         match parsed {
@@ -162,7 +166,7 @@ impl EventSubClient {
                 tracing::warn!("⚠️ Subscription revoked: type={}", sub_type);
             }
             _ => {
-                tracing::debug!("Unknown EventSub message type: {:?}", parsed);
+                tracing::warn!("Unknown EventSub message type: {:?}", parsed);
             }
         }
 

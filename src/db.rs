@@ -11,7 +11,7 @@ pub async fn create_db() -> AppResult<SqliteDb> {
 
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:db/db.sqlite".to_string());
 
-    println!("Connecting to database at {}", db_url);
+    tracing::info!("Connecting to database at {}", db_url);
 
     let connection_options = SqliteConnectOptions::from_str(&db_url)?.create_if_missing(true);
 

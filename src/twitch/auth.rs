@@ -3,7 +3,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, broadcast};
 use twitch_oauth2::Scope;
 use twitch_oauth2::tokens::UserToken;
 use twitch_oauth2::tokens::UserTokenBuilder;
@@ -33,10 +33,12 @@ pub struct UserTokenManager {
     http_client: Client,
     token: Arc<RwLock<Option<UserToken>>>,
     pending_csrf: Arc<RwLock<Option<String>>>,
+    token_change_tx: broadcast::Sender<()>,
 }
 
 impl UserTokenManager {
     pub fn new(client_id: String, client_secret: String, redirect_uri: String) -> Self {
+        let (token_change_tx, _) = broadcast::channel(1);
         Self {
             client_id,
             client_secret,
@@ -44,10 +46,15 @@ impl UserTokenManager {
             http_client: Client::new(),
             token: Arc::new(RwLock::new(None)),
             pending_csrf: Arc::new(RwLock::new(None)),
+            token_change_tx,
         }
     }
 
-    pub async fn load_from_db<T: Db + Send + Sync>(&self, db: &T) -> AppResult<()> {
+    pub fn subscribe_token_changes(&self) -> broadcast::Receiver<()> {
+        self.token_change_tx.subscribe()
+    }
+
+    pub async fn load_from_db<T: Db + Send + Sync + ?Sized>(&self, db: &T) -> AppResult<()> {
         if let Some(stored) = db.get_twitch_token().await? {
             if !stored.refresh_token.is_empty() {
                 tracing::info!("Loaded Twitch token from database, validating...");
@@ -100,7 +107,11 @@ impl UserTokenManager {
         Ok(url.to_string())
     }
 
-    pub async fn exchange_code<T: Db + Send + Sync>(&self, db: &T, code: &str) -> AppResult<()> {
+    pub async fn exchange_code<T: Db + Send + Sync + ?Sized>(
+        &self,
+        db: &T,
+        code: &str,
+    ) -> AppResult<()> {
         tracing::info!("Exchanging authorization code for tokens...");
 
         {
@@ -183,6 +194,8 @@ impl UserTokenManager {
             let mut token_guard = self.token.write().await;
             *token_guard = Some(user_token);
         }
+
+        let _ = self.token_change_tx.send(());
 
         tracing::info!("OAuth authorization successful, token saved to database");
         Ok(())

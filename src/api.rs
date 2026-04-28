@@ -1,7 +1,6 @@
 use axum::{
     Json, Router,
     extract::Extension,
-    extract::State,
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -9,10 +8,9 @@ use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
 use utoipa_swagger_ui::SwaggerUi;
 
+use crate::app_services::AppServices;
 use crate::app_state::AppState;
-use crate::db::Db;
 use crate::error::{AppError, AppResult};
-use crate::twitch::auth::UserTokenManager;
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[schema(example = json!({"name": "Star"}))]
@@ -116,16 +114,13 @@ pub async fn get_vapid_public_key() -> AppResult<axum::Json<VapidPublicKeyRespon
         (status = 200, body = PushTestResponse, description = "Send test push to all subscriptions")
     )
 )]
-pub async fn test_push_all<T: Db>(
-    State(db): State<T>,
+pub async fn test_push_all(
+    Extension(services): Extension<AppServices>,
     Json(req): Json<PushTestRequest>,
-) -> AppResult<axum::Json<PushTestResponse>>
-where
-    T: Db + Send + Sync,
-{
+) -> AppResult<axum::Json<PushTestResponse>> {
     use crate::push::PushClient;
 
-    let subscriptions = db.get_all_subscriptions().await?;
+    let subscriptions = services.db.get_all_subscriptions().await?;
     let client = match PushClient::from_env() {
         Some(c) => c,
         None => return Ok(axum::Json(PushTestResponse { sent: 0 })),
@@ -160,15 +155,12 @@ pub async fn get_king(Extension(state): Extension<AppState>) -> axum::Json<KingR
         (status = 200, body = KingResponse, description = "Update king")
     )
 )]
-pub async fn post_king<T: Db>(
+pub async fn post_king(
     Extension(state): Extension<AppState>,
-    State(db): State<T>,
+    Extension(services): Extension<AppServices>,
     Json(req): Json<KingRequest>,
-) -> AppResult<axum::Json<KingResponse>>
-where
-    T: Db + Send + Sync,
-{
-    db.insert_king(&req.name).await?;
+) -> AppResult<axum::Json<KingResponse>> {
+    services.db.insert_king(&req.name).await?;
     let mut king = state.king.write().await;
     *king = req.name.clone();
     Ok(axum::Json(KingResponse { name: req.name }))
@@ -198,15 +190,12 @@ pub async fn get_month(Extension(state): Extension<AppState>) -> axum::Json<Dona
         (status = 200, body = DonatersResponse, description = "Add month donater")
     )
 )]
-pub async fn post_month<T: Db>(
+pub async fn post_month(
     Extension(state): Extension<AppState>,
-    State(db): State<T>,
+    Extension(services): Extension<AppServices>,
     Json(req): Json<DonaterRequest>,
-) -> AppResult<axum::Json<DonatersResponse>>
-where
-    T: Db + Send + Sync,
-{
-    db.insert_month_donater(&req.name).await?;
+) -> AppResult<axum::Json<DonatersResponse>> {
+    services.db.insert_month_donater(&req.name).await?;
     let mut month = state.month.write().await;
     month.push(req.name.clone());
     Ok(axum::Json(DonatersResponse {
@@ -223,15 +212,12 @@ where
         (status = 200, body = DonatersResponse, description = "Add last day donater")
     )
 )]
-pub async fn post_last_day<T: Db>(
+pub async fn post_last_day(
     Extension(state): Extension<AppState>,
-    State(db): State<T>,
+    Extension(services): Extension<AppServices>,
     Json(req): Json<DonaterRequest>,
-) -> AppResult<axum::Json<DonatersResponse>>
-where
-    T: Db + Send + Sync,
-{
-    db.insert_last_day_donater(&req.name).await?;
+) -> AppResult<axum::Json<DonatersResponse>> {
+    services.db.insert_last_day_donater(&req.name).await?;
     let mut last_day = state.last_day.write().await;
     last_day.push(req.name.clone());
     if last_day.len() > 10 {
@@ -266,20 +252,19 @@ pub async fn get_last_day(Extension(state): Extension<AppState>) -> axum::Json<D
         (status = 200, body = PushSubscriptionResponse, description = "Save push subscription")
     )
 )]
-pub async fn post_subscription<T: Db>(
-    State(db): State<T>,
+pub async fn post_subscription(
+    Extension(services): Extension<AppServices>,
     Json(req): Json<PushSubscriptionRequest>,
-) -> AppResult<axum::Json<PushSubscriptionResponse>>
-where
-    T: Db + Send + Sync,
-{
-    db.insert_subscription(
-        &req.endpoint,
-        &req.keys.p256dh,
-        &req.keys.auth,
-        req.user_id.as_deref(),
-    )
-    .await?;
+) -> AppResult<axum::Json<PushSubscriptionResponse>> {
+    services
+        .db
+        .insert_subscription(
+            &req.endpoint,
+            &req.keys.p256dh,
+            &req.keys.auth,
+            req.user_id.as_deref(),
+        )
+        .await?;
     Ok(axum::Json(PushSubscriptionResponse { success: true }))
 }
 
@@ -292,14 +277,11 @@ where
         (status = 200, body = PushSubscriptionResponse, description = "Delete push subscription")
     )
 )]
-pub async fn delete_subscription<T: Db>(
-    State(db): State<T>,
+pub async fn delete_subscription(
+    Extension(services): Extension<AppServices>,
     Json(req): Json<PushSubscriptionRequest>,
-) -> AppResult<axum::Json<PushSubscriptionResponse>>
-where
-    T: Db + Send + Sync,
-{
-    db.delete_subscription(&req.endpoint).await?;
+) -> AppResult<axum::Json<PushSubscriptionResponse>> {
+    services.db.delete_subscription(&req.endpoint).await?;
     Ok(axum::Json(PushSubscriptionResponse { success: true }))
 }
 
@@ -317,9 +299,9 @@ pub struct OAuthUrlResponse {
     )
 )]
 pub async fn get_oauth_url(
-    Extension(token_manager): Extension<std::sync::Arc<UserTokenManager>>,
+    Extension(services): Extension<AppServices>,
 ) -> AppResult<axum::Json<OAuthUrlResponse>> {
-    let url = token_manager.get_oauth_url().await?;
+    let url = services.token_manager.get_oauth_url().await?;
     Ok(axum::Json(OAuthUrlResponse { url }))
 }
 
@@ -337,13 +319,15 @@ pub struct OAuthCallbackResponse {
         (status = 200, body = OAuthCallbackResponse, description = "OAuth callback result")
     )
 )]
-pub async fn oauth_callback<T: Db + Send + Sync>(
-    Extension(token_manager): Extension<std::sync::Arc<UserTokenManager>>,
-    State(db): State<T>,
+pub async fn oauth_callback(
+    Extension(services): Extension<AppServices>,
     axum::extract::Query(params): axum::extract::Query<OAuthCallbackParams>,
 ) -> AppResult<axum::Json<OAuthCallbackResponse>> {
     let code = params.code.as_str();
-    token_manager.exchange_code(&db, code).await?;
+    services
+        .token_manager
+        .exchange_code(services.db.as_ref(), code)
+        .await?;
 
     Ok(axum::Json(OAuthCallbackResponse {
         success: true,
@@ -379,26 +363,22 @@ pub struct OAuthCallbackParams {
 #[allow(dead_code)]
 pub struct ApiDoc;
 
-pub fn router<T>(state: AppState, db: T, token_manager: std::sync::Arc<UserTokenManager>) -> Router
-where
-    T: Db + Clone + Send + Sync + 'static,
-{
+pub fn router(state: AppState, services: AppServices) -> Router {
     Router::new()
         .route("/api/health", get(health))
-        .route("/api/king", get(get_king).post(post_king::<T>))
-        .route("/api/month", get(get_month).post(post_month::<T>))
-        .route("/api/last-day", get(get_last_day).post(post_last_day::<T>))
+        .route("/api/king", get(get_king).post(post_king))
+        .route("/api/month", get(get_month).post(post_month))
+        .route("/api/last-day", get(get_last_day).post(post_last_day))
         .route(
             "/api/push/subscription",
-            post(post_subscription::<T>).delete(delete_subscription::<T>),
+            post(post_subscription).delete(delete_subscription),
         )
         .route("/api/push/vapid-public-key", get(get_vapid_public_key))
-        .route("/api/push/test-all", post(test_push_all::<T>))
+        .route("/api/push/test-all", post(test_push_all))
         .route("/api/oauth/url", get(get_oauth_url))
-        .route("/api/oauth/callback", get(oauth_callback::<T>))
+        .route("/api/oauth/callback", get(oauth_callback))
         .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .layer(axum::Extension(state))
-        .layer(axum::Extension(token_manager))
-        .with_state(db)
+        .layer(axum::Extension(services))
 }
