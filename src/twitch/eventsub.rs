@@ -1,10 +1,11 @@
-use futures_util::{Sink, SinkExt, StreamExt};
+use futures_util::{Sink, StreamExt};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-
+use twitch_api::eventsub::channel::chat::message::ChannelChatMessageV1;
 use twitch_api::eventsub::{Event, EventsubWebsocketData};
+use twitch_api::HelixClient;
 
 use crate::error::AppError;
 use crate::twitch::auth::UserTokenManager;
@@ -13,12 +14,17 @@ const TWITCH_EVENTSUB_WS_URL: &str = "wss://eventsub.wss.twitch.tv/ws";
 
 pub struct EventSubClient {
     _token_manager: Arc<UserTokenManager>,
+    helix: Arc<HelixClient<'static, reqwest::Client>>,
 }
 
 impl EventSubClient {
-    pub fn new(token_manager: Arc<UserTokenManager>) -> Self {
+    pub fn new(
+        token_manager: Arc<UserTokenManager>,
+        helix: Arc<HelixClient<'static, reqwest::Client>>,
+    ) -> Self {
         Self {
             _token_manager: token_manager,
+            helix,
         }
     }
 
@@ -53,13 +59,16 @@ impl EventSubClient {
 
         let (mut write, mut read) = ws_stream.split();
         let mut session_id: Option<String> = None;
-        let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(30));
+        let mut last_message_time: Option<std::time::Instant> = None;
+        let mut keepalive_timeout = std::time::Duration::from_secs(30);
 
         loop {
             tokio::select! {
                 msg = read.next() => {
                     match msg {
                         Some(Ok(Message::Text(text))) => {
+                            last_message_time = Some(std::time::Instant::now());
+
                             let parsed = match Event::parse_websocket(&text) {
                                 Ok(p) => p,
                                 Err(e) => {
@@ -67,12 +76,17 @@ impl EventSubClient {
                                     continue;
                                 }
                             };
-                            self.handle_message_impl(parsed, &mut session_id, &mut write).await?;
+
+                            if let EventsubWebsocketData::Welcome { payload, .. } = &parsed {
+                                if let Some(timeout) = payload.session.keepalive_timeout_seconds {
+                                    keepalive_timeout = std::time::Duration::from_secs((timeout * 2) as u64);
+                                    tracing::info!("Keepalive timeout set to {} seconds (2x multiplier)", timeout * 2);
+                                }
+                            }
+
+                            self.handle_message_impl(parsed, &mut session_id, &mut last_message_time, &mut write).await?;
                         }
-                        Some(Ok(Message::Ping(data))) => {
-                            tracing::debug!("Received ping, sending pong");
-                            write.send(Message::Pong(data)).await
-                                .map_err(|e| AppError::Internal(format!("Failed to send pong: {:?}", e)))?;
+                        Some(Ok(Message::Ping(_))) => {
                         }
                         Some(Ok(Message::Close(close_frame))) => {
                             tracing::info!("WebSocket closed: {:?}", close_frame);
@@ -89,15 +103,12 @@ impl EventSubClient {
                         _ => {}
                     }
                 }
-                _ = heartbeat_interval.tick() => {
-                    if session_id.is_some() {
-                        let ping_msg = serde_json::json!({
-                            "type": "PING"
-                        });
-                        let msg_str = serde_json::to_string(&ping_msg)
-                            .map_err(|e| AppError::Internal(format!("Failed to serialize ping: {}", e)))?;
-                        write.send(Message::Text(msg_str.into())).await
-                            .map_err(|e| AppError::Internal(format!("Failed to send ping: {}", e)))?;
+                _ = tokio::time::sleep(keepalive_timeout) => {
+                    if let Some(last) = last_message_time {
+                        if last.elapsed() > keepalive_timeout {
+                            tracing::warn!("Keepalive timeout exceeded, reconnecting...");
+                            return Err(AppError::Internal("Keepalive timeout".to_string()));
+                        }
                     }
                 }
             }
@@ -110,6 +121,7 @@ impl EventSubClient {
         &self,
         parsed: EventsubWebsocketData<'_>,
         session_id: &mut Option<String>,
+        last_message_time: &mut Option<std::time::Instant>,
         _write: &mut S,
     ) -> Result<(), AppError>
     where
@@ -129,12 +141,19 @@ impl EventSubClient {
                     payload.session.status
                 );
                 *session_id = Some(payload.session.id.to_string());
+
+                if let Some(broadcaster_user_id) = self._token_manager.get_broadcaster_id().await {
+                    if let Some(session_id) = session_id.as_ref() {
+                        self.subscribe_chat_messages(session_id, &broadcaster_user_id).await?;
+                    }
+                }
             }
             EventsubWebsocketData::Keepalive {
                 metadata: _,
                 payload: _,
             } => {
-                tracing::debug!("Session keepalive received");
+                tracing::info!("Keepalive received");
+                *last_message_time = Some(std::time::Instant::now());
             }
             EventsubWebsocketData::Notification {
                 metadata: _,
@@ -172,13 +191,45 @@ impl EventSubClient {
 
         Ok(())
     }
+
+    async fn subscribe_chat_messages(
+        &self,
+        session_id: &str,
+        broadcaster_user_id: &str,
+    ) -> Result<(), AppError> {
+        let token = self._token_manager.get_token().await
+            .ok_or_else(|| AppError::Internal("No token available".to_string()))?;
+
+        tracing::info!(
+            "Creating subscription: broadcaster_id={}, token_user_id={}",
+            broadcaster_user_id,
+            token.user_id
+        );
+
+        let subscription = ChannelChatMessageV1::new(
+            broadcaster_user_id.to_string(),
+            broadcaster_user_id.to_string(),
+        );
+
+        let transport = twitch_api::eventsub::Transport::websocket(session_id);
+
+        let result = self.helix
+            .create_eventsub_subscription(subscription, transport, &*token)
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to create subscription: {}", e)))?;
+
+        tracing::info!("Subscribed to channel.chat.message: id={}", result.id);
+
+        Ok(())
+    }
 }
 
 pub async fn start_eventsub_task(
     token_manager: Arc<UserTokenManager>,
+    helix: Arc<HelixClient<'static, reqwest::Client>>,
     shutdown: broadcast::Receiver<()>,
 ) {
-    let client = EventSubClient::new(token_manager);
+    let client = EventSubClient::new(token_manager, helix);
 
     if let Err(e) = client.run(shutdown).await {
         tracing::error!("EventSub task error: {:?}", e);

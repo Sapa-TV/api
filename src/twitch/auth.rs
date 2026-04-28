@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{RwLock, broadcast};
-use twitch_oauth2::Scope;
-use twitch_oauth2::tokens::UserToken;
-use twitch_oauth2::tokens::UserTokenBuilder;
-use twitch_oauth2::types::{AccessToken, ClientId, ClientSecret, RefreshToken};
-use twitch_oauth2::url::Url;
+use twitch_api::twitch_oauth2::Scope;
+use twitch_api::twitch_oauth2::tokens::UserToken;
+use twitch_api::twitch_oauth2::tokens::UserTokenBuilder;
+use twitch_api::twitch_oauth2::types::{AccessToken, ClientId, ClientSecret, RefreshToken};
+use twitch_api::twitch_oauth2::url::Url;
 
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
@@ -17,6 +17,11 @@ const TWITCH_SCOPES: &[Scope] = &[
     Scope::UserReadEmail,
     Scope::ChannelReadSubscriptions,
     Scope::ChannelReadGuestStar,
+    Scope::UserReadChat,
+    Scope::ChatEdit,
+    Scope::ModerationRead,
+    Scope::ChannelReadRedemptions,
+    Scope::ChannelManageRedemptions,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +88,16 @@ impl UserTokenManager {
     pub async fn get_access_token(&self) -> Option<String> {
         let token_guard = self.token.read().await;
         token_guard.as_ref().map(|t| t.access_token.clone().into())
+    }
+
+    pub async fn get_token(&self) -> Option<Arc<twitch_api::twitch_oauth2::UserToken>> {
+        let token_guard = self.token.read().await;
+        token_guard.as_ref().map(|t| Arc::new(t.clone()))
+    }
+
+    pub async fn get_broadcaster_id(&self) -> Option<String> {
+        let token_guard = self.token.read().await;
+        token_guard.as_ref().map(|t| t.user_id.clone().into())
     }
 
     pub async fn get_oauth_url(&self) -> AppResult<String> {
@@ -159,7 +174,7 @@ impl UserTokenManager {
         }
 
         let twitch_response = response
-            .json::<twitch_oauth2::id::TwitchTokenResponse>()
+            .json::<twitch_api::twitch_oauth2::id::TwitchTokenResponse>()
             .await
             .map_err(|e| AppError::Internal(format!("Failed to parse token response: {}", e)))?;
 

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
+use twitch_api::HelixClient;
 
 use crate::db::Db;
 use crate::error::AppResult;
@@ -9,15 +10,21 @@ use crate::twitch::eventsub;
 
 pub struct EventSubManager {
     token_manager: Arc<UserTokenManager>,
+    helix: Arc<HelixClient<'static, reqwest::Client>>,
     db: Arc<dyn Db + Send + Sync>,
     shutdown_tx: Arc<RwLock<Option<broadcast::Sender<()>>>>,
     handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 impl EventSubManager {
-    fn new(token_manager: Arc<UserTokenManager>, db: Arc<dyn Db + Send + Sync>) -> Self {
+    fn new(
+        token_manager: Arc<UserTokenManager>,
+        helix: Arc<HelixClient<'static, reqwest::Client>>,
+        db: Arc<dyn Db + Send + Sync>,
+    ) -> Self {
         Self {
             token_manager,
+            helix,
             db,
             shutdown_tx: Arc::new(RwLock::new(None)),
             handle: Arc::new(RwLock::new(None)),
@@ -29,10 +36,11 @@ impl EventSubManager {
 
         let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
         let token_manager = self.token_manager.clone();
+        let helix = self.helix.clone();
 
         let handle = tokio::spawn(async move {
             tracing::info!("Starting Twitch EventSub listener");
-            eventsub::start_eventsub_task(token_manager, shutdown_rx).await;
+            eventsub::start_eventsub_task(token_manager, helix, shutdown_rx).await;
         });
 
         {
@@ -66,6 +74,7 @@ impl EventSubManager {
 pub struct AppServices {
     pub db: Arc<dyn Db + Send + Sync>,
     pub token_manager: Arc<UserTokenManager>,
+    pub helix: Arc<HelixClient<'static, reqwest::Client>>,
     eventsub_manager: Arc<EventSubManager>,
 }
 
@@ -75,6 +84,7 @@ pub struct AppServicesBuilder {
     client_secret: Option<String>,
     redirect_uri: Option<String>,
     token_manager: Option<Arc<UserTokenManager>>,
+    helix: Option<Arc<HelixClient<'static, reqwest::Client>>>,
     eventsub_enabled: bool,
     watch_token_changes: bool,
 }
@@ -87,6 +97,7 @@ impl AppServicesBuilder {
             client_secret: None,
             redirect_uri: None,
             token_manager: None,
+            helix: None,
             eventsub_enabled: true,
             watch_token_changes: true,
         }
@@ -114,6 +125,11 @@ impl AppServicesBuilder {
 
     pub fn token_manager(mut self, token_manager: Arc<UserTokenManager>) -> Self {
         self.token_manager = Some(token_manager);
+        self
+    }
+
+    pub fn helix(mut self, helix: Arc<HelixClient<'static, reqwest::Client>>) -> Self {
+        self.helix = Some(helix);
         self
     }
 
@@ -156,8 +172,14 @@ impl AppServicesBuilder {
 
         token_manager.load_from_db(db.as_ref()).await?;
 
+        let helix = match self.helix {
+            Some(h) => h,
+            None => Arc::new(HelixClient::new()),
+        };
+
         let eventsub_manager = Arc::new(EventSubManager::new(
             Arc::clone(&token_manager),
+            helix.clone(),
             Arc::clone(&db),
         ));
 
@@ -173,6 +195,7 @@ impl AppServicesBuilder {
         let services = AppServices {
             db,
             token_manager,
+            helix,
             eventsub_manager,
         };
 

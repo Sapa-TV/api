@@ -43,6 +43,9 @@ async fn main() -> AppResult<()> {
     tracing::info!("Swagger UI: http://localhost:3000/docs");
     tracing::info!("ReDoc: http://localhost:3000/redoc");
     tracing::info!("OpenAPI JSON: http://localhost:3000/openapi.json");
+    if let Ok(oauth_url) = services.token_manager.get_oauth_url().await {
+        tracing::info!("OAuth URL: {}", oauth_url);
+    }
 
     let server = async {
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
