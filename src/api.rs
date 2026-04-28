@@ -11,6 +11,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::app_state::AppState;
 use crate::db::Db;
+use crate::error::{AppError, AppResult};
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[schema(example = json!({"name": "Star"}))]
@@ -95,12 +96,14 @@ pub async fn health() -> axum::Json<HealthResponse> {
     path = "/api/push/vapid-public-key",
     tag = "Push",
     responses(
-        (status = 200, body = VapidPublicKeyResponse, description = "VAPID public key for push notifications")
+        (status = 200, body = VapidPublicKeyResponse, description = "VAPID public key for push notifications"),
+        (status = 500, description = "VAPID_PUBLIC_KEY not configured")
     )
 )]
-pub async fn get_vapid_public_key() -> axum::Json<VapidPublicKeyResponse> {
-    let key = std::env::var("VAPID_PUBLIC_KEY").unwrap_or_default();
-    axum::Json(VapidPublicKeyResponse { key })
+pub async fn get_vapid_public_key() -> AppResult<axum::Json<VapidPublicKeyResponse>> {
+    let key = std::env::var("VAPID_PUBLIC_KEY")
+        .map_err(|_| AppError::Env("VAPID_PUBLIC_KEY not configured".to_string()))?;
+    Ok(axum::Json(VapidPublicKeyResponse { key }))
 }
 
 #[utoipa::path(
@@ -115,23 +118,23 @@ pub async fn get_vapid_public_key() -> axum::Json<VapidPublicKeyResponse> {
 pub async fn test_push_all<T: Db>(
     State(db): State<T>,
     Json(req): Json<PushTestRequest>,
-) -> axum::Json<PushTestResponse>
+) -> AppResult<axum::Json<PushTestResponse>>
 where
     T: Db + Send + Sync,
 {
     use crate::push::PushClient;
 
-    let subscriptions = db.get_all_subscriptions().await.unwrap_or_default();
+    let subscriptions = db.get_all_subscriptions().await?;
     let client = match PushClient::from_env() {
         Some(c) => c,
-        None => return axum::Json(PushTestResponse { sent: 0 }),
+        None => return Ok(axum::Json(PushTestResponse { sent: 0 })),
     };
 
     let sent = client
         .send_to_all(&subscriptions, &req.title, &req.body)
         .await;
 
-    axum::Json(PushTestResponse { sent })
+    Ok(axum::Json(PushTestResponse { sent }))
 }
 
 #[utoipa::path(
@@ -160,14 +163,14 @@ pub async fn post_king<T: Db>(
     Extension(state): Extension<AppState>,
     State(db): State<T>,
     Json(req): Json<KingRequest>,
-) -> axum::Json<KingResponse>
+) -> AppResult<axum::Json<KingResponse>>
 where
     T: Db + Send + Sync,
 {
-    db.insert_king(&req.name).await.unwrap();
+    db.insert_king(&req.name).await?;
     let mut king = state.king.write().await;
     *king = req.name.clone();
-    axum::Json(KingResponse { name: req.name })
+    Ok(axum::Json(KingResponse { name: req.name }))
 }
 
 #[utoipa::path(
@@ -198,16 +201,16 @@ pub async fn post_month<T: Db>(
     Extension(state): Extension<AppState>,
     State(db): State<T>,
     Json(req): Json<DonaterRequest>,
-) -> axum::Json<DonatersResponse>
+) -> AppResult<axum::Json<DonatersResponse>>
 where
     T: Db + Send + Sync,
 {
-    db.insert_month_donater(&req.name).await.unwrap();
+    db.insert_month_donater(&req.name).await?;
     let mut month = state.month.write().await;
     month.push(req.name.clone());
-    axum::Json(DonatersResponse {
+    Ok(axum::Json(DonatersResponse {
         donaters: month.clone(),
-    })
+    }))
 }
 
 #[utoipa::path(
@@ -223,19 +226,19 @@ pub async fn post_last_day<T: Db>(
     Extension(state): Extension<AppState>,
     State(db): State<T>,
     Json(req): Json<DonaterRequest>,
-) -> axum::Json<DonatersResponse>
+) -> AppResult<axum::Json<DonatersResponse>>
 where
     T: Db + Send + Sync,
 {
-    db.insert_last_day_donater(&req.name).await.unwrap();
+    db.insert_last_day_donater(&req.name).await?;
     let mut last_day = state.last_day.write().await;
     last_day.push(req.name.clone());
     if last_day.len() > 10 {
         last_day.remove(0);
     }
-    axum::Json(DonatersResponse {
+    Ok(axum::Json(DonatersResponse {
         donaters: last_day.clone(),
-    })
+    }))
 }
 
 #[utoipa::path(
@@ -265,7 +268,7 @@ pub async fn get_last_day(Extension(state): Extension<AppState>) -> axum::Json<D
 pub async fn post_subscription<T: Db>(
     State(db): State<T>,
     Json(req): Json<PushSubscriptionRequest>,
-) -> axum::Json<PushSubscriptionResponse>
+) -> AppResult<axum::Json<PushSubscriptionResponse>>
 where
     T: Db + Send + Sync,
 {
@@ -275,9 +278,8 @@ where
         &req.keys.auth,
         req.user_id.as_deref(),
     )
-    .await
-    .unwrap();
-    axum::Json(PushSubscriptionResponse { success: true })
+    .await?;
+    Ok(axum::Json(PushSubscriptionResponse { success: true }))
 }
 
 #[utoipa::path(
@@ -292,12 +294,12 @@ where
 pub async fn delete_subscription<T: Db>(
     State(db): State<T>,
     Json(req): Json<PushSubscriptionRequest>,
-) -> axum::Json<PushSubscriptionResponse>
+) -> AppResult<axum::Json<PushSubscriptionResponse>>
 where
     T: Db + Send + Sync,
 {
-    db.delete_subscription(&req.endpoint).await.unwrap();
-    axum::Json(PushSubscriptionResponse { success: true })
+    db.delete_subscription(&req.endpoint).await?;
+    Ok(axum::Json(PushSubscriptionResponse { success: true }))
 }
 
 #[derive(OpenApi)]

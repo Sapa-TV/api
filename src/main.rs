@@ -1,6 +1,7 @@
 mod api;
 mod app_state;
 mod db;
+mod error;
 mod push;
 
 use std::net::SocketAddr;
@@ -8,10 +9,11 @@ use std::net::SocketAddr;
 use api::router;
 use app_state::create_state;
 use db::{create_db, init_db};
+use error::AppResult;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> AppResult<()> {
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))

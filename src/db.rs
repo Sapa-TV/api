@@ -3,7 +3,9 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use std::env;
 use std::str::FromStr;
 
-pub async fn create_db() -> Result<SqliteDb, sqlx::Error> {
+use crate::error::AppResult;
+
+pub async fn create_db() -> AppResult<SqliteDb> {
     dotenv().ok();
 
     let db_url = env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:db/db.sqlite".to_string());
@@ -19,7 +21,7 @@ pub async fn create_db() -> Result<SqliteDb, sqlx::Error> {
     Ok(SqliteDb::new(pool))
 }
 
-pub async fn init_db(db: &dyn Db) -> Result<(), sqlx::Error> {
+pub async fn init_db(db: &dyn Db) -> AppResult<()> {
     let existing_king = db.get_king().await?;
     if existing_king.is_none() {
         db.insert_king("Star").await?;
@@ -56,12 +58,12 @@ pub struct PushSubscription {
 
 #[async_trait::async_trait]
 pub trait Db: Send + Sync {
-    async fn get_king(&self) -> Result<Option<String>, sqlx::Error>;
-    async fn get_last_day_donaters(&self) -> Result<Vec<String>, sqlx::Error>;
-    async fn get_month_donaters(&self) -> Result<Vec<String>, sqlx::Error>;
-    async fn insert_king(&self, name: &str) -> Result<(), sqlx::Error>;
-    async fn insert_last_day_donater(&self, name: &str) -> Result<(), sqlx::Error>;
-    async fn insert_month_donater(&self, name: &str) -> Result<(), sqlx::Error>;
+    async fn get_king(&self) -> AppResult<Option<String>>;
+    async fn get_last_day_donaters(&self) -> AppResult<Vec<String>>;
+    async fn get_month_donaters(&self) -> AppResult<Vec<String>>;
+    async fn insert_king(&self, name: &str) -> AppResult<()>;
+    async fn insert_last_day_donater(&self, name: &str) -> AppResult<()>;
+    async fn insert_month_donater(&self, name: &str) -> AppResult<()>;
 
     async fn insert_subscription(
         &self,
@@ -69,9 +71,9 @@ pub trait Db: Send + Sync {
         p256dh: &str,
         auth: &str,
         user_id: Option<&str>,
-    ) -> Result<(), sqlx::Error>;
-    async fn get_all_subscriptions(&self) -> Result<Vec<PushSubscription>, sqlx::Error>;
-    async fn delete_subscription(&self, endpoint: &str) -> Result<(), sqlx::Error>;
+    ) -> AppResult<()>;
+    async fn get_all_subscriptions(&self) -> AppResult<Vec<PushSubscription>>;
+    async fn delete_subscription(&self, endpoint: &str) -> AppResult<()>;
 }
 
 pub struct SqliteDb {
@@ -94,7 +96,7 @@ impl SqliteDb {
 
 #[async_trait::async_trait]
 impl Db for SqliteDb {
-    async fn get_king(&self) -> Result<Option<String>, sqlx::Error> {
+    async fn get_king(&self) -> AppResult<Option<String>> {
         let result: Option<(String,)> =
             sqlx::query_as("SELECT name FROM king ORDER BY id DESC LIMIT 1")
                 .fetch_optional(&self.pool)
@@ -102,7 +104,7 @@ impl Db for SqliteDb {
         Ok(result.map(|(name,)| name))
     }
 
-    async fn get_last_day_donaters(&self) -> Result<Vec<String>, sqlx::Error> {
+    async fn get_last_day_donaters(&self) -> AppResult<Vec<String>> {
         let results: Vec<(String,)> =
             sqlx::query_as("SELECT name FROM last_day_donaters ORDER BY id DESC LIMIT 10")
                 .fetch_all(&self.pool)
@@ -110,7 +112,7 @@ impl Db for SqliteDb {
         Ok(results.into_iter().map(|(name,)| name).collect())
     }
 
-    async fn get_month_donaters(&self) -> Result<Vec<String>, sqlx::Error> {
+    async fn get_month_donaters(&self) -> AppResult<Vec<String>> {
         let results: Vec<(String,)> =
             sqlx::query_as("SELECT name FROM month_donaters ORDER BY id DESC LIMIT 10")
                 .fetch_all(&self.pool)
@@ -118,7 +120,7 @@ impl Db for SqliteDb {
         Ok(results.into_iter().map(|(name,)| name).collect())
     }
 
-    async fn insert_king(&self, name: &str) -> Result<(), sqlx::Error> {
+    async fn insert_king(&self, name: &str) -> AppResult<()> {
         sqlx::query("INSERT INTO king (name) VALUES (?)")
             .bind(name)
             .execute(&self.pool)
@@ -126,7 +128,7 @@ impl Db for SqliteDb {
         Ok(())
     }
 
-    async fn insert_last_day_donater(&self, name: &str) -> Result<(), sqlx::Error> {
+    async fn insert_last_day_donater(&self, name: &str) -> AppResult<()> {
         sqlx::query("INSERT INTO last_day_donaters (name) VALUES (?)")
             .bind(name)
             .execute(&self.pool)
@@ -134,7 +136,7 @@ impl Db for SqliteDb {
         Ok(())
     }
 
-    async fn insert_month_donater(&self, name: &str) -> Result<(), sqlx::Error> {
+    async fn insert_month_donater(&self, name: &str) -> AppResult<()> {
         sqlx::query("INSERT INTO month_donaters (name) VALUES (?)")
             .bind(name)
             .execute(&self.pool)
@@ -148,7 +150,7 @@ impl Db for SqliteDb {
         p256dh: &str,
         auth: &str,
         user_id: Option<&str>,
-    ) -> Result<(), sqlx::Error> {
+    ) -> AppResult<()> {
         sqlx::query(
             "INSERT OR REPLACE INTO push_subscriptions (endpoint, p256dh, auth, user_id) VALUES (?, ?, ?, ?)",
         )
@@ -161,7 +163,7 @@ impl Db for SqliteDb {
         Ok(())
     }
 
-    async fn get_all_subscriptions(&self) -> Result<Vec<PushSubscription>, sqlx::Error> {
+    async fn get_all_subscriptions(&self) -> AppResult<Vec<PushSubscription>> {
         let results = sqlx::query_as::<_, PushSubscription>(
             "SELECT id, endpoint, p256dh, auth, user_id, created_at FROM push_subscriptions",
         )
@@ -170,7 +172,7 @@ impl Db for SqliteDb {
         Ok(results)
     }
 
-    async fn delete_subscription(&self, endpoint: &str) -> Result<(), sqlx::Error> {
+    async fn delete_subscription(&self, endpoint: &str) -> AppResult<()> {
         sqlx::query("DELETE FROM push_subscriptions WHERE endpoint = ?")
             .bind(endpoint)
             .execute(&self.pool)
