@@ -4,6 +4,7 @@ use std::env;
 use std::str::FromStr;
 
 use crate::error::AppResult;
+use crate::twitch::auth::StoredToken;
 
 pub async fn create_db() -> AppResult<SqliteDb> {
     dotenv().ok();
@@ -48,12 +49,10 @@ pub async fn init_db(db: &dyn Db) -> AppResult<()> {
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct PushSubscription {
-    pub id: i64,
     pub endpoint: String,
     pub p256dh: String,
     pub auth: String,
     pub user_id: Option<String>,
-    pub created_at: String,
 }
 
 #[async_trait::async_trait]
@@ -74,6 +73,9 @@ pub trait Db: Send + Sync {
     ) -> AppResult<()>;
     async fn get_all_subscriptions(&self) -> AppResult<Vec<PushSubscription>>;
     async fn delete_subscription(&self, endpoint: &str) -> AppResult<()>;
+
+    async fn get_twitch_token(&self) -> AppResult<Option<StoredToken>>;
+    async fn save_twitch_token(&self, token: &StoredToken) -> AppResult<()>;
 }
 
 pub struct SqliteDb {
@@ -177,6 +179,33 @@ impl Db for SqliteDb {
             .bind(endpoint)
             .execute(&self.pool)
             .await?;
+        Ok(())
+    }
+
+    async fn get_twitch_token(&self) -> AppResult<Option<StoredToken>> {
+        let result: Option<(String, String, String)> = sqlx::query_as(
+            "SELECT access_token, refresh_token, created_at FROM twitch_tokens WHERE id = 1",
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(
+            result.map(|(access_token, refresh_token, created_at)| StoredToken {
+                access_token,
+                refresh_token,
+                created_at,
+            }),
+        )
+    }
+
+    async fn save_twitch_token(&self, token: &StoredToken) -> AppResult<()> {
+        sqlx::query(
+            "UPDATE twitch_tokens SET access_token = ?, refresh_token = ?, updated_at = datetime('now') WHERE id = 1",
+        )
+        .bind(&token.access_token)
+        .bind(&token.refresh_token)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 }

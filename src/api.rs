@@ -12,6 +12,7 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::app_state::AppState;
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
+use crate::twitch::auth::UserTokenManager;
 
 #[derive(Serialize, utoipa::ToSchema)]
 #[schema(example = json!({"name": "Star"}))]
@@ -302,16 +303,73 @@ where
     Ok(axum::Json(PushSubscriptionResponse { success: true }))
 }
 
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct OAuthUrlResponse {
+    pub url: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/oauth/url",
+    tag = "OAuth",
+    responses(
+        (status = 200, body = OAuthUrlResponse, description = "Twitch OAuth authorization URL")
+    )
+)]
+pub async fn get_oauth_url(
+    Extension(token_manager): Extension<std::sync::Arc<UserTokenManager>>,
+) -> AppResult<axum::Json<OAuthUrlResponse>> {
+    let url = token_manager.get_oauth_url().await?;
+    Ok(axum::Json(OAuthUrlResponse { url }))
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct OAuthCallbackResponse {
+    pub success: bool,
+    pub message: String,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/oauth/callback",
+    tag = "OAuth",
+    responses(
+        (status = 200, body = OAuthCallbackResponse, description = "OAuth callback result")
+    )
+)]
+pub async fn oauth_callback<T: Db + Send + Sync>(
+    Extension(token_manager): Extension<std::sync::Arc<UserTokenManager>>,
+    State(db): State<T>,
+    axum::extract::Query(params): axum::extract::Query<OAuthCallbackParams>,
+) -> AppResult<axum::Json<OAuthCallbackResponse>> {
+    let code = params.code.as_str();
+    token_manager.exchange_code(&db, code).await?;
+
+    Ok(axum::Json(OAuthCallbackResponse {
+        success: true,
+        message: "Authorization successful! You can now use the EventSub functionality."
+            .to_string(),
+    }))
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct OAuthCallbackParams {
+    pub code: String,
+    #[allow(dead_code)]
+    pub state: Option<String>,
+}
+
 #[derive(OpenApi)]
 #[openapi(
     tags(
         (name = "Health", description = "Health check"),
         (name = "King", description = "King operations"),
         (name = "Donaters", description = "Donaters operations"),
-        (name = "Push", description = "Web Push notifications")
+        (name = "Push", description = "Web Push notifications"),
+        (name = "OAuth", description = "Twitch OAuth authorization")
     ),
-    paths(health, get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription, get_vapid_public_key, test_push_all),
-    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse, PushTestRequest, PushTestResponse)),
+    paths(health, get_king, post_king, get_month, post_month, get_last_day, post_last_day, post_subscription, delete_subscription, get_vapid_public_key, test_push_all, get_oauth_url, oauth_callback),
+    components(schemas(HealthResponse, KingResponse, DonatersResponse, KingRequest, DonaterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse, PushTestRequest, PushTestResponse, OAuthUrlResponse, OAuthCallbackResponse, OAuthCallbackParams)),
     info(
         title = "api",
         version = "v0",
@@ -321,7 +379,7 @@ where
 #[allow(dead_code)]
 pub struct ApiDoc;
 
-pub fn router<T>(state: AppState, db: T) -> Router
+pub fn router<T>(state: AppState, db: T, token_manager: std::sync::Arc<UserTokenManager>) -> Router
 where
     T: Db + Clone + Send + Sync + 'static,
 {
@@ -336,8 +394,11 @@ where
         )
         .route("/api/push/vapid-public-key", get(get_vapid_public_key))
         .route("/api/push/test-all", post(test_push_all::<T>))
+        .route("/api/oauth/url", get(get_oauth_url))
+        .route("/api/oauth/callback", get(oauth_callback::<T>))
         .merge(SwaggerUi::new("/docs").url("/openapi.json", ApiDoc::openapi()))
         .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
         .layer(axum::Extension(state))
+        .layer(axum::Extension(token_manager))
         .with_state(db)
 }
