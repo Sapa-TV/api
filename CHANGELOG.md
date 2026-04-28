@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [0.2.0](https://github.com/Sapa-TV/api/compare/525864cf3bebfb9342c16c2e02bbeb5de9434cc5..0.2.0) - 2026-04-28
+#### Features
+- add eventsub subscription - ([51ea697](https://github.com/Sapa-TV/api/commit/51ea6971d53c2aafd4be6f28dbd73353cdf7b438)) - Th0rN13
+#### Bug Fixes
+- update eventsub workflow - ([ff667a4](https://github.com/Sapa-TV/api/commit/ff667a48f38fa77a1bc6645d20fdf2894c10609c)) - Th0rN13
+- separate app services, fix error with crypto - ([33deeb8](https://github.com/Sapa-TV/api/commit/33deeb80d0bd157b924335ca90cfa5db3a3dc384)) - Th0rN13
+#### Refactoring
+- add thiserror crate, use it - ([525864c](https://github.com/Sapa-TV/api/commit/525864cf3bebfb9342c16c2e02bbeb5de9434cc5)) - Th0rN13
+
+- - -
+
 ## [0.1.0](https://github.com/Sapa-TV/api/compare/f2eddd54b2c26732a7866b23581e5b486d06d2a6..0.1.0) - 2026-04-24
 #### Features
 - add tracing logs - ([267dae6](https://github.com/Sapa-TV/api/commit/267dae6062acb053137d6527a961595beacc3477)) - Th0rN13
