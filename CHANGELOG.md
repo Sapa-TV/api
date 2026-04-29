@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [0.2.1](https://github.com/Sapa-TV/api/compare/2aecb8442fce6085bcc661f19fbc7e29e3d4e4b0..0.2.1) - 2026-04-29
+#### Bug Fixes
+- output version and commit hash at start - ([3c06279](https://github.com/Sapa-TV/api/commit/3c06279f1cc44ad11e5887f92875a0f77e51e1b8)) - Th0rN13
+- remove keepalive message spam - ([8e67795](https://github.com/Sapa-TV/api/commit/8e67795517c338db5e763be1eabe4a47767c0d8f)) - Th0rN13
+- output api url instead of oauth url - ([2aecb84](https://github.com/Sapa-TV/api/commit/2aecb8442fce6085bcc661f19fbc7e29e3d4e4b0)) - Th0rN13
+
+- - -
+
 ## [0.2.0](https://github.com/Sapa-TV/api/compare/525864cf3bebfb9342c16c2e02bbeb5de9434cc5..0.2.0) - 2026-04-28
 #### Features
 - add eventsub subscription - ([51ea697](https://github.com/Sapa-TV/api/commit/51ea6971d53c2aafd4be6f28dbd73353cdf7b438)) - Th0rN13
