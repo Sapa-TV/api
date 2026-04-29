@@ -57,6 +57,7 @@ pub struct PushSubscriptionResponse {
 pub struct HealthResponse {
     pub status: String,
     pub version: String,
+    pub commit: String,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -87,6 +88,7 @@ pub async fn health() -> axum::Json<HealthResponse> {
     axum::Json(HealthResponse {
         status: "ok".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
+        commit: env!("GIT_HASH").to_string(),
     })
 }
 

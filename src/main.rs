@@ -29,6 +29,8 @@ async fn main() -> AppResult<()> {
         .init();
 
     tracing::info!("Starting application");
+    println!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+    println!("Commit: {}", env!("GIT_HASH"));
 
     let db = Arc::new(create_db().await?);
     init_db(db.as_ref()).await?;
