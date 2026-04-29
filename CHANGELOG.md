@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [0.3.0](https://github.com/Sapa-TV/api/compare/e2040c4ef8f29fc1c0e470df11743c66a450840a..0.3.0) - 2026-04-29
+#### Features
+- add user_id verify - ([e2040c4](https://github.com/Sapa-TV/api/commit/e2040c4ef8f29fc1c0e470df11743c66a450840a)) - Th0rN13
+
+- - -
+
 ## [0.2.1](https://github.com/Sapa-TV/api/compare/2aecb8442fce6085bcc661f19fbc7e29e3d4e4b0..0.2.1) - 2026-04-29
 #### Bug Fixes
 - output version and commit hash at start - ([3c06279](https://github.com/Sapa-TV/api/commit/3c06279f1cc44ad11e5887f92875a0f77e51e1b8)) - Th0rN13
