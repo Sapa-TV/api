@@ -28,6 +28,7 @@
 | `VAPID_CONTACT`        | URL или mailto для VAPID (sub claim) | Да          |
 | `TWITCH_CLIENT_ID`     | Client ID Twitch приложения          | Да          |
 | `TWITCH_CLIENT_SECRET` | Client secret Twitch приложения      | Да          |
+| `TWITCH_USER_ID`       | Обновление Oauth только для user_id  | Да          |
 | `TWITCH_REDIRECT_URI`  | OAuth callback URI                   | Нет         |
 
 ## Команды

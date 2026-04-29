@@ -326,16 +326,25 @@ pub async fn oauth_callback(
     axum::extract::Query(params): axum::extract::Query<OAuthCallbackParams>,
 ) -> AppResult<axum::Json<OAuthCallbackResponse>> {
     let code = params.code.as_str();
-    services
+    match services
         .token_manager
         .exchange_code(services.db.as_ref(), code)
-        .await?;
-
-    Ok(axum::Json(OAuthCallbackResponse {
-        success: true,
-        message: "Authorization successful! You can now use the EventSub functionality."
-            .to_string(),
-    }))
+        .await
+    {
+        Ok(_) => Ok(axum::Json(OAuthCallbackResponse {
+            success: true,
+            message: "Authorization successful! You can now use the EventSub functionality."
+                .to_string(),
+        })),
+        Err(AppError::Unauthorized(msg)) => {
+            tracing::warn!("OAuth callback ignored: {}", msg);
+            Ok(axum::Json(OAuthCallbackResponse {
+                success: false,
+                message: "Authorization failed".to_string(),
+            }))
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]

@@ -17,6 +17,9 @@ pub enum AppError {
     #[error("Environment variable error: {0}")]
     Env(String),
 
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
     #[error("Internal server error: {0}")]
     #[allow(dead_code)]
     Internal(String),
@@ -43,6 +46,10 @@ impl IntoResponse for AppError {
             AppError::Env(msg) => {
                 tracing::error!("Environment error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
+            AppError::Unauthorized(msg) => {
+                tracing::warn!("Unauthorized: {}", msg);
+                (StatusCode::OK, self.to_string())
             }
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);

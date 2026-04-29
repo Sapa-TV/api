@@ -193,6 +193,13 @@ impl UserTokenManager {
         .await
         .map_err(|e| AppError::Internal(format!("Failed to create UserToken: {}", e)))?;
 
+        let expected_user_id = std::env::var("TWITCH_USER_ID")
+            .map_err(|_| AppError::Env("TWITCH_USER_ID not set".to_string()))?;
+
+        if user_token.user_id.as_ref() != expected_user_id {
+            return Err(AppError::Unauthorized("user_id mismatch".to_string()));
+        }
+
         let stored_token = StoredToken {
             access_token: user_token.access_token.clone().into(),
             refresh_token: user_token
