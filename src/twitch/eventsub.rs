@@ -3,9 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
+use twitch_api::HelixClient;
 use twitch_api::eventsub::channel::chat::message::ChannelChatMessageV1;
 use twitch_api::eventsub::{Event, EventsubWebsocketData};
-use twitch_api::HelixClient;
 
 use crate::error::AppError;
 use crate::twitch::auth::UserTokenManager;
@@ -144,7 +144,8 @@ impl EventSubClient {
 
                 if let Some(broadcaster_user_id) = self._token_manager.get_broadcaster_id().await {
                     if let Some(session_id) = session_id.as_ref() {
-                        self.subscribe_chat_messages(session_id, &broadcaster_user_id).await?;
+                        self.subscribe_chat_messages(session_id, &broadcaster_user_id)
+                            .await?;
                     }
                 }
             }
@@ -152,7 +153,6 @@ impl EventSubClient {
                 metadata: _,
                 payload: _,
             } => {
-                tracing::info!("Keepalive received");
                 *last_message_time = Some(std::time::Instant::now());
             }
             EventsubWebsocketData::Notification {
@@ -197,7 +197,10 @@ impl EventSubClient {
         session_id: &str,
         broadcaster_user_id: &str,
     ) -> Result<(), AppError> {
-        let token = self._token_manager.get_token().await
+        let token = self
+            ._token_manager
+            .get_token()
+            .await
             .ok_or_else(|| AppError::Internal("No token available".to_string()))?;
 
         tracing::info!(
@@ -213,7 +216,8 @@ impl EventSubClient {
 
         let transport = twitch_api::eventsub::Transport::websocket(session_id);
 
-        let result = self.helix
+        let result = self
+            .helix
             .create_eventsub_subscription(subscription, transport, &*token)
             .await
             .map_err(|e| AppError::Internal(format!("Failed to create subscription: {}", e)))?;
