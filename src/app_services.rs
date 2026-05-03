@@ -3,15 +3,17 @@ use tokio::sync::RwLock;
 use tokio::sync::broadcast;
 use twitch_api::HelixClient;
 
+use crate::app_logic::{ChatHandler, StreamLifecycle};
 use crate::db::Db;
 use crate::error::AppResult;
-use crate::twitch::auth::UserTokenManager;
-use crate::twitch::eventsub;
+use crate::providers::twitch::auth::UserTokenManager;
+use crate::providers::twitch::eventsub;
+use crate::providers::twitch::lifecycle::TwitchLifecycle;
 
 pub struct EventSubManager {
     token_manager: Arc<UserTokenManager>,
     helix: Arc<HelixClient<'static, reqwest::Client>>,
-    db: Arc<dyn Db + Send + Sync>,
+    lifecycle: Arc<TwitchLifecycle>,
     shutdown_tx: Arc<RwLock<Option<broadcast::Sender<()>>>>,
     handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
@@ -20,12 +22,12 @@ impl EventSubManager {
     fn new(
         token_manager: Arc<UserTokenManager>,
         helix: Arc<HelixClient<'static, reqwest::Client>>,
-        db: Arc<dyn Db + Send + Sync>,
+        lifecycle: Arc<TwitchLifecycle>,
     ) -> Self {
         Self {
             token_manager,
             helix,
-            db,
+            lifecycle,
             shutdown_tx: Arc::new(RwLock::new(None)),
             handle: Arc::new(RwLock::new(None)),
         }
@@ -37,10 +39,11 @@ impl EventSubManager {
         let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
         let token_manager = self.token_manager.clone();
         let helix = self.helix.clone();
+        let lifecycle = self.lifecycle.clone();
 
         let handle = tokio::spawn(async move {
             tracing::info!("Starting Twitch EventSub listener");
-            eventsub::start_eventsub_task(token_manager, helix, shutdown_rx).await;
+            eventsub::start_eventsub_task(token_manager, helix, lifecycle, shutdown_rx).await;
         });
 
         {
@@ -177,10 +180,15 @@ impl AppServicesBuilder {
             None => Arc::new(HelixClient::new()),
         };
 
+        let stream_lifecycle: Arc<dyn StreamLifecycle> = Arc::new(TwitchStreamLifecycleAdapter);
+        let chat_handler: Arc<dyn ChatHandler> = Arc::new(TwitchChatHandlerAdapter);
+
+        let lifecycle = Arc::new(TwitchLifecycle::new(stream_lifecycle, chat_handler));
+
         let eventsub_manager = Arc::new(EventSubManager::new(
             Arc::clone(&token_manager),
             helix.clone(),
-            Arc::clone(&db),
+            lifecycle,
         ));
 
         if self.eventsub_enabled && token_manager.get_access_token().await.is_some() {
@@ -210,6 +218,53 @@ impl AppServicesBuilder {
 impl Default for AppServicesBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+struct TwitchStreamLifecycleAdapter;
+
+#[async_trait::async_trait]
+impl StreamLifecycle for TwitchStreamLifecycleAdapter {
+    async fn on_started(
+        &self,
+        provider: &str,
+        started_at: chrono::DateTime<chrono::Utc>,
+    ) -> AppResult<()> {
+        tracing::info!("[{}] Stream started at {}", provider, started_at);
+        Ok(())
+    }
+
+    async fn on_ended(
+        &self,
+        provider: &str,
+        ended_at: chrono::DateTime<chrono::Utc>,
+    ) -> AppResult<()> {
+        tracing::info!("[{}] Stream ended at {}", provider, ended_at);
+        Ok(())
+    }
+}
+
+struct TwitchChatHandlerAdapter;
+
+#[async_trait::async_trait]
+impl ChatHandler for TwitchChatHandlerAdapter {
+    async fn on_message(
+        &self,
+        provider: &str,
+        user_id: &str,
+        username: &str,
+        message: &str,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> AppResult<()> {
+        tracing::info!(
+            "[{}] Chat message from {} ({}): {} at {}",
+            provider,
+            username,
+            user_id,
+            message,
+            timestamp
+        );
+        Ok(())
     }
 }
 

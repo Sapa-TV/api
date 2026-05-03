@@ -22,6 +22,7 @@ const TWITCH_SCOPES: &[Scope] = &[
     Scope::ModerationRead,
     Scope::ChannelReadRedemptions,
     Scope::ChannelManageRedemptions,
+    Scope::ChannelReadStreamKey,
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

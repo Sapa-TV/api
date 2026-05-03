@@ -5,26 +5,32 @@ use tokio::sync::broadcast;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use twitch_api::HelixClient;
 use twitch_api::eventsub::channel::chat::message::ChannelChatMessageV1;
+use twitch_api::eventsub::stream::offline::StreamOfflineV1;
+use twitch_api::eventsub::stream::online::StreamOnlineV1;
 use twitch_api::eventsub::{Event, EventsubWebsocketData};
 
-use crate::error::AppError;
-use crate::twitch::auth::UserTokenManager;
+use super::lifecycle::TwitchLifecycle;
+use crate::error::{AppError, AppResult};
+use crate::providers::twitch::auth::UserTokenManager;
 
 const TWITCH_EVENTSUB_WS_URL: &str = "wss://eventsub.wss.twitch.tv/ws";
 
 pub struct EventSubClient {
     _token_manager: Arc<UserTokenManager>,
     helix: Arc<HelixClient<'static, reqwest::Client>>,
+    lifecycle: Arc<TwitchLifecycle>,
 }
 
 impl EventSubClient {
     pub fn new(
         token_manager: Arc<UserTokenManager>,
         helix: Arc<HelixClient<'static, reqwest::Client>>,
+        lifecycle: Arc<TwitchLifecycle>,
     ) -> Self {
         Self {
             _token_manager: token_manager,
             helix,
+            lifecycle,
         }
     }
 
@@ -144,6 +150,10 @@ impl EventSubClient {
 
                 if let Some(broadcaster_user_id) = self._token_manager.get_broadcaster_id().await {
                     if let Some(session_id) = session_id.as_ref() {
+                        self.subscribe_stream_started(session_id, &broadcaster_user_id)
+                            .await?;
+                        self.subscribe_stream_ended(session_id, &broadcaster_user_id)
+                            .await?;
                         self.subscribe_chat_messages(session_id, &broadcaster_user_id)
                             .await?;
                     }
@@ -159,13 +169,7 @@ impl EventSubClient {
                 metadata: _,
                 payload,
             } => {
-                let sub_type = format!("{:?}", payload);
-                tracing::info!("📨 EventSub notification: type={}", sub_type);
-
-                tracing::debug!(
-                    "Event data: {}",
-                    serde_json::to_string_pretty(&payload).unwrap_or_default()
-                );
+                self.handle_notification(payload).await?;
             }
             EventsubWebsocketData::Reconnect {
                 metadata: _,
@@ -192,6 +196,111 @@ impl EventSubClient {
         Ok(())
     }
 
+    async fn handle_notification(&self, event: Event) -> AppResult<()> {
+        let sub_type = format!("{:?}", event);
+        tracing::info!("📨 EventSub notification: type={}", sub_type);
+
+        tracing::debug!(
+            "Event data: {}",
+            serde_json::to_string_pretty(&event).unwrap_or_default()
+        );
+
+        match event {
+            Event::StreamOnlineV1(payload) => {
+                let timestamp = chrono::Utc::now();
+                self.lifecycle.on_stream_started(timestamp).await?;
+            }
+            Event::StreamOfflineV1(payload) => {
+                let timestamp = chrono::Utc::now();
+                self.lifecycle.on_stream_ended(timestamp).await?;
+            }
+            Event::ChannelChatMessageV1(payload) => {
+                if let twitch_api::eventsub::Message::Notification(event) = &payload.message {
+                    let user_id = event.chatter_user_id.as_str();
+                    let username = event.chatter_user_name.as_str();
+                    let message = event.message.text.as_str();
+                    let timestamp = chrono::Utc::now();
+                    self.lifecycle
+                        .on_chat_message(user_id, username, message, timestamp)
+                        .await?;
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    async fn subscribe_stream_started(
+        &self,
+        session_id: &str,
+        broadcaster_user_id: &str,
+    ) -> Result<(), AppError> {
+        let token = self
+            ._token_manager
+            .get_token()
+            .await
+            .ok_or_else(|| AppError::Internal("No token available".to_string()))?;
+
+        tracing::info!(
+            "Creating stream.online subscription: broadcaster_id={}",
+            broadcaster_user_id
+        );
+
+        let subscription = StreamOnlineV1::broadcaster_user_id(broadcaster_user_id.to_string());
+
+        let transport = twitch_api::eventsub::Transport::websocket(session_id);
+
+        let result = self
+            .helix
+            .create_eventsub_subscription(subscription, transport, &*token)
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to create stream.online subscription: {}",
+                    e
+                ))
+            })?;
+
+        tracing::info!("Subscribed to stream.online: id={}", result.id);
+        Ok(())
+    }
+
+    async fn subscribe_stream_ended(
+        &self,
+        session_id: &str,
+        broadcaster_user_id: &str,
+    ) -> Result<(), AppError> {
+        let token = self
+            ._token_manager
+            .get_token()
+            .await
+            .ok_or_else(|| AppError::Internal("No token available".to_string()))?;
+
+        tracing::info!(
+            "Creating stream.offline subscription: broadcaster_id={}",
+            broadcaster_user_id
+        );
+
+        let subscription = StreamOfflineV1::broadcaster_user_id(broadcaster_user_id.to_string());
+
+        let transport = twitch_api::eventsub::Transport::websocket(session_id);
+
+        let result = self
+            .helix
+            .create_eventsub_subscription(subscription, transport, &*token)
+            .await
+            .map_err(|e| {
+                AppError::Internal(format!(
+                    "Failed to create stream.offline subscription: {}",
+                    e
+                ))
+            })?;
+
+        tracing::info!("Subscribed to stream.offline: id={}", result.id);
+        Ok(())
+    }
+
     async fn subscribe_chat_messages(
         &self,
         session_id: &str,
@@ -204,9 +313,8 @@ impl EventSubClient {
             .ok_or_else(|| AppError::Internal("No token available".to_string()))?;
 
         tracing::info!(
-            "Creating subscription: broadcaster_id={}, token_user_id={}",
+            "Creating chat.message subscription: broadcaster_id={}",
             broadcaster_user_id,
-            token.user_id
         );
 
         let subscription = ChannelChatMessageV1::new(
@@ -231,9 +339,10 @@ impl EventSubClient {
 pub async fn start_eventsub_task(
     token_manager: Arc<UserTokenManager>,
     helix: Arc<HelixClient<'static, reqwest::Client>>,
+    lifecycle: Arc<TwitchLifecycle>,
     shutdown: broadcast::Receiver<()>,
 ) {
-    let client = EventSubClient::new(token_manager, helix);
+    let client = EventSubClient::new(token_manager, helix, lifecycle);
 
     if let Err(e) = client.run(shutdown).await {
         tracing::error!("EventSub task error: {:?}", e);

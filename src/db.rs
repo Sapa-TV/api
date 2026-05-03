@@ -4,7 +4,7 @@ use std::env;
 use std::str::FromStr;
 
 use crate::error::AppResult;
-use crate::twitch::auth::StoredToken;
+use crate::providers::twitch::auth::StoredToken;
 
 pub async fn create_db() -> AppResult<SqliteDb> {
     dotenv().ok();

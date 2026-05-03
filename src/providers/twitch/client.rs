@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use crate::db::Db;
 use crate::error::AppResult;
-use crate::twitch::auth::UserTokenManager;
+
+use super::auth::UserTokenManager;
 
 #[allow(dead_code)]
 pub struct TwitchClient {
