@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tokio::sync::broadcast;
 use twitch_api::HelixClient;
@@ -8,10 +9,10 @@ use super::auth::UserTokenManager;
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
 
-#[derive(Clone)]
 pub struct TwitchApiClient {
     helix: Arc<HelixClient<'static, reqwest::Client>>,
     token_manager: Arc<UserTokenManager>,
+    needs_reauth: AtomicBool,
 }
 
 impl TwitchApiClient {
@@ -22,6 +23,7 @@ impl TwitchApiClient {
         Self {
             helix,
             token_manager,
+            needs_reauth: AtomicBool::new(false),
         }
     }
 
@@ -34,19 +36,23 @@ impl TwitchApiClient {
     }
 
     pub fn needs_reauth(&self) -> bool {
-        self.token_manager.needs_reauth()
+        self.needs_reauth.load(Ordering::Relaxed)
     }
 
     pub fn set_needs_reauth(&self, value: bool) {
-        self.token_manager.set_needs_reauth(value);
+        self.needs_reauth.store(value, Ordering::Relaxed);
     }
 
     pub async fn get_oauth_url(&self) -> AppResult<String> {
         self.token_manager.get_oauth_url().await
     }
 
-    pub async fn exchange_code<T: Db + ?Sized>(&self, db: &T, code: &str) -> AppResult<()> {
-        self.token_manager.exchange_code(db, code).await
+    pub async fn exchange_code<T: Db + ?Sized>(&self, db: &T, code: &str) -> AppResult<bool> {
+        let scopes_valid = self.token_manager.exchange_code(db, code).await?;
+        if !scopes_valid {
+            self.set_needs_reauth(true);
+        }
+        Ok(scopes_valid)
     }
 
     pub fn subscribe_token_changes(&self) -> broadcast::Receiver<()> {
@@ -70,7 +76,7 @@ impl TwitchApiClient {
             .await
             .map_err(|e| {
                 tracing::warn!("EventSub subscription failed: {}", e);
-                self.token_manager.set_needs_reauth(true);
+                self.set_needs_reauth(true);
                 AppError::Internal(format!("Failed to create subscription: {}", e))
             })?;
 

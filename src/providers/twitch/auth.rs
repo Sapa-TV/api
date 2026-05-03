@@ -51,7 +51,6 @@ pub struct UserTokenManager {
     token: Arc<RwLock<Option<UserToken>>>,
     pending_csrf: Arc<RwLock<Option<String>>>,
     token_change_tx: broadcast::Sender<()>,
-    needs_reauth: Arc<RwLock<bool>>,
 }
 
 impl UserTokenManager {
@@ -65,7 +64,6 @@ impl UserTokenManager {
             token: Arc::new(RwLock::new(None)),
             pending_csrf: Arc::new(RwLock::new(None)),
             token_change_tx,
-            needs_reauth: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -73,16 +71,8 @@ impl UserTokenManager {
         self.token_change_tx.subscribe()
     }
 
-    pub fn set_needs_reauth(&self, value: bool) {
-        let mut guard = self.needs_reauth.blocking_write();
-        *guard = value;
-    }
-
-    pub fn needs_reauth(&self) -> bool {
-        *self.needs_reauth.blocking_read()
-    }
-
-    pub async fn load_from_db<T: Db + Send + Sync + ?Sized>(&self, db: &T) -> AppResult<()> {
+    pub async fn load_from_db<T: Db + Send + Sync + ?Sized>(&self, db: &T) -> AppResult<bool> {
+        let mut scopes_valid = true;
         if let Some(stored) = db.get_twitch_token().await? {
             if !stored.refresh_token.is_empty() {
                 tracing::info!("Loaded Twitch token from database, validating...");
@@ -104,11 +94,11 @@ impl UserTokenManager {
 
                 if !TWITCH_SCOPES_VALIDATOR.matches(user_token.scopes()) {
                     tracing::warn!("Token scopes do not match required scopes");
-                    self.set_needs_reauth(true);
+                    scopes_valid = false;
                 }
             }
         }
-        Ok(())
+        Ok(scopes_valid)
     }
 
     pub async fn get_access_token(&self) -> Option<String> {
@@ -152,7 +142,7 @@ impl UserTokenManager {
         &self,
         db: &T,
         code: &str,
-    ) -> AppResult<()> {
+    ) -> AppResult<bool> {
         tracing::info!("Exchanging authorization code for tokens...");
 
         {
@@ -243,14 +233,14 @@ impl UserTokenManager {
             *token_guard = Some(user_token.clone());
         }
 
-        if !TWITCH_SCOPES_VALIDATOR.matches(user_token.scopes()) {
+        let scopes_valid = TWITCH_SCOPES_VALIDATOR.matches(user_token.scopes());
+        if !scopes_valid {
             tracing::warn!("Token scopes from exchange do not match required scopes");
-            self.set_needs_reauth(true);
         }
 
         let _ = self.token_change_tx.send(());
 
         tracing::info!("OAuth authorization successful, token saved to database");
-        Ok(())
+        Ok(scopes_valid)
     }
 }

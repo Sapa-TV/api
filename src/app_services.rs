@@ -147,18 +147,22 @@ impl AppServicesBuilder {
             redirect_uri,
         ));
 
-        token_manager.load_from_db(db.as_ref()).await?;
-
         let helix = Arc::new(HelixClient::new());
 
         let twitch_api = Arc::new(TwitchApiClient::new(helix, Arc::clone(&token_manager)));
+
+        let scopes_valid = token_manager.load_from_db(db.as_ref()).await?;
+        if !scopes_valid {
+            tracing::warn!("Token scopes do not match required, will need reauthorization");
+            twitch_api.set_needs_reauth(true);
+        }
 
         let stream_lifecycle: Arc<dyn StreamLifecycle> = Arc::new(TwitchStreamLifecycleAdapter);
         let chat_handler: Arc<dyn ChatHandler> = Arc::new(TwitchChatHandlerAdapter);
 
         let lifecycle = Arc::new(TwitchLifecycle::new(stream_lifecycle, chat_handler));
 
-        let eventsub_manager = Arc::new(EventSubManager::new(twitch_api.clone(), lifecycle));
+        let eventsub_manager = Arc::new(EventSubManager::new(Arc::clone(&twitch_api), lifecycle));
 
         if self.eventsub_enabled && token_manager.get_access_token().await.is_some() {
             tracing::info!("Twitch user token found, starting EventSub...");

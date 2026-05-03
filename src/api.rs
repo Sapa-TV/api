@@ -333,11 +333,16 @@ pub async fn oauth_callback(
         .exchange_code(services.db.as_ref(), code)
         .await
     {
-        Ok(_) => Ok(axum::Json(OAuthCallbackResponse {
-            success: true,
-            message: "Authorization successful! You can now use the EventSub functionality."
-                .to_string(),
-        })),
+        Ok(scopes_valid) => {
+            if !scopes_valid {
+                tracing::warn!("OAuth succeeded but scopes don't match requirements");
+            }
+            Ok(axum::Json(OAuthCallbackResponse {
+                success: true,
+                message: "Authorization successful! You can now use the EventSub functionality."
+                    .to_string(),
+            }))
+        }
         Err(AppError::Unauthorized(msg)) => {
             tracing::warn!("OAuth callback ignored: {}", msg);
             Ok(axum::Json(OAuthCallbackResponse {
