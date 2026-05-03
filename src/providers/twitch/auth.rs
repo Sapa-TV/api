@@ -5,15 +5,26 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{RwLock, broadcast};
 use twitch_api::twitch_oauth2::Scope;
+use twitch_api::twitch_oauth2::TwitchToken;
+use twitch_api::twitch_oauth2::Validator;
 use twitch_api::twitch_oauth2::tokens::UserToken;
 use twitch_api::twitch_oauth2::tokens::UserTokenBuilder;
 use twitch_api::twitch_oauth2::types::{AccessToken, ClientId, ClientSecret, RefreshToken};
 use twitch_api::twitch_oauth2::url::Url;
+use twitch_api::twitch_oauth2::validator;
 
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
 
-const TWITCH_SCOPES: &[Scope] = &[
+macro_rules! define_scopes {
+    ($($s:expr),* $(,)?) => {
+        pub const TWITCH_SCOPES: &[Scope] = &[ $($s),* ];
+
+        pub const TWITCH_SCOPES_VALIDATOR: Validator = validator!($($s),*);
+    };
+}
+
+define_scopes![
     Scope::UserReadEmail,
     Scope::ChannelReadSubscriptions,
     Scope::ChannelReadGuestStar,
@@ -40,6 +51,7 @@ pub struct UserTokenManager {
     token: Arc<RwLock<Option<UserToken>>>,
     pending_csrf: Arc<RwLock<Option<String>>>,
     token_change_tx: broadcast::Sender<()>,
+    needs_reauth: Arc<RwLock<bool>>,
 }
 
 impl UserTokenManager {
@@ -53,11 +65,21 @@ impl UserTokenManager {
             token: Arc::new(RwLock::new(None)),
             pending_csrf: Arc::new(RwLock::new(None)),
             token_change_tx,
+            needs_reauth: Arc::new(RwLock::new(false)),
         }
     }
 
     pub fn subscribe_token_changes(&self) -> broadcast::Receiver<()> {
         self.token_change_tx.subscribe()
+    }
+
+    pub fn set_needs_reauth(&self, value: bool) {
+        let mut guard = self.needs_reauth.blocking_write();
+        *guard = value;
+    }
+
+    pub fn needs_reauth(&self) -> bool {
+        *self.needs_reauth.blocking_read()
     }
 
     pub async fn load_from_db<T: Db + Send + Sync + ?Sized>(&self, db: &T) -> AppResult<()> {
@@ -78,9 +100,12 @@ impl UserTokenManager {
                 })?;
 
                 let mut token_guard = self.token.write().await;
-                *token_guard = Some(user_token);
+                *token_guard = Some(user_token.clone());
 
-                tracing::info!("Twitch token validated successfully");
+                if !TWITCH_SCOPES_VALIDATOR.matches(user_token.scopes()) {
+                    tracing::warn!("Token scopes do not match required scopes");
+                    self.set_needs_reauth(true);
+                }
             }
         }
         Ok(())
@@ -215,7 +240,12 @@ impl UserTokenManager {
 
         {
             let mut token_guard = self.token.write().await;
-            *token_guard = Some(user_token);
+            *token_guard = Some(user_token.clone());
+        }
+
+        if !TWITCH_SCOPES_VALIDATOR.matches(user_token.scopes()) {
+            tracing::warn!("Token scopes from exchange do not match required scopes");
+            self.set_needs_reauth(true);
         }
 
         let _ = self.token_change_tx.send(());

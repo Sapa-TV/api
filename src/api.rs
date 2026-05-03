@@ -58,6 +58,7 @@ pub struct HealthResponse {
     pub status: String,
     pub version: String,
     pub commit: String,
+    pub need_token_update: bool,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -84,11 +85,12 @@ pub struct PushTestResponse {
         (status = 200, body = HealthResponse, description = "Health check")
     )
 )]
-pub async fn health() -> axum::Json<HealthResponse> {
+pub async fn health(Extension(services): Extension<AppServices>) -> axum::Json<HealthResponse> {
     axum::Json(HealthResponse {
         status: "ok".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         commit: env!("GIT_HASH").to_string(),
+        need_token_update: services.twitch_api.needs_reauth(),
     })
 }
 
@@ -303,7 +305,7 @@ pub struct OAuthUrlResponse {
 pub async fn get_oauth_url(
     Extension(services): Extension<AppServices>,
 ) -> AppResult<axum::Json<OAuthUrlResponse>> {
-    let url = services.token_manager.get_oauth_url().await?;
+    let url = services.twitch_api.get_oauth_url().await?;
     Ok(axum::Json(OAuthUrlResponse { url }))
 }
 
@@ -327,7 +329,7 @@ pub async fn oauth_callback(
 ) -> AppResult<axum::Json<OAuthCallbackResponse>> {
     let code = params.code.as_str();
     match services
-        .token_manager
+        .twitch_api
         .exchange_code(services.db.as_ref(), code)
         .await
     {

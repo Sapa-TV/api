@@ -1,32 +1,27 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
-use twitch_api::HelixClient;
 
 use crate::app_logic::{ChatHandler, StreamLifecycle};
 use crate::db::Db;
 use crate::error::AppResult;
 use crate::providers::twitch::auth::UserTokenManager;
+use crate::providers::twitch::client::TwitchApiClient;
 use crate::providers::twitch::eventsub;
 use crate::providers::twitch::lifecycle::TwitchLifecycle;
+use twitch_api::HelixClient;
 
 pub struct EventSubManager {
-    token_manager: Arc<UserTokenManager>,
-    helix: Arc<HelixClient<'static, reqwest::Client>>,
+    api_client: Arc<TwitchApiClient>,
     lifecycle: Arc<TwitchLifecycle>,
     shutdown_tx: Arc<RwLock<Option<broadcast::Sender<()>>>>,
     handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 impl EventSubManager {
-    fn new(
-        token_manager: Arc<UserTokenManager>,
-        helix: Arc<HelixClient<'static, reqwest::Client>>,
-        lifecycle: Arc<TwitchLifecycle>,
-    ) -> Self {
+    fn new(api_client: Arc<TwitchApiClient>, lifecycle: Arc<TwitchLifecycle>) -> Self {
         Self {
-            token_manager,
-            helix,
+            api_client,
             lifecycle,
             shutdown_tx: Arc::new(RwLock::new(None)),
             handle: Arc::new(RwLock::new(None)),
@@ -37,13 +32,12 @@ impl EventSubManager {
         self.stop().await;
 
         let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
-        let token_manager = self.token_manager.clone();
-        let helix = self.helix.clone();
+        let api_client = self.api_client.clone();
         let lifecycle = self.lifecycle.clone();
 
         let handle = tokio::spawn(async move {
             tracing::info!("Starting Twitch EventSub listener");
-            eventsub::start_eventsub_task(token_manager, helix, lifecycle, shutdown_rx).await;
+            eventsub::start_eventsub_task(api_client, lifecycle, shutdown_rx).await;
         });
 
         {
@@ -76,8 +70,7 @@ impl EventSubManager {
 #[derive(Clone)]
 pub struct AppServices {
     pub db: Arc<dyn Db + Send + Sync>,
-    pub token_manager: Arc<UserTokenManager>,
-    pub helix: Arc<HelixClient<'static, reqwest::Client>>,
+    pub twitch_api: Arc<TwitchApiClient>,
     eventsub_manager: Arc<EventSubManager>,
 }
 
@@ -86,8 +79,6 @@ pub struct AppServicesBuilder {
     client_id: Option<String>,
     client_secret: Option<String>,
     redirect_uri: Option<String>,
-    token_manager: Option<Arc<UserTokenManager>>,
-    helix: Option<Arc<HelixClient<'static, reqwest::Client>>>,
     eventsub_enabled: bool,
     watch_token_changes: bool,
 }
@@ -99,8 +90,6 @@ impl AppServicesBuilder {
             client_id: None,
             client_secret: None,
             redirect_uri: None,
-            token_manager: None,
-            helix: None,
             eventsub_enabled: true,
             watch_token_changes: true,
         }
@@ -126,16 +115,6 @@ impl AppServicesBuilder {
         self
     }
 
-    pub fn token_manager(mut self, token_manager: Arc<UserTokenManager>) -> Self {
-        self.token_manager = Some(token_manager);
-        self
-    }
-
-    pub fn helix(mut self, helix: Arc<HelixClient<'static, reqwest::Client>>) -> Self {
-        self.helix = Some(helix);
-        self
-    }
-
     pub fn eventsub_enabled(mut self, enabled: bool) -> Self {
         self.eventsub_enabled = enabled;
         self
@@ -151,45 +130,35 @@ impl AppServicesBuilder {
             .db
             .ok_or_else(|| crate::error::AppError::Internal("db is required".to_string()))?;
 
-        let token_manager = match self.token_manager {
-            Some(tm) => tm,
-            None => {
-                let client_id = self.client_id.unwrap_or_else(|| {
-                    std::env::var("TWITCH_CLIENT_ID").expect("TWITCH_CLIENT_ID not set")
-                });
-                let client_secret = self.client_secret.unwrap_or_else(|| {
-                    std::env::var("TWITCH_CLIENT_SECRET").expect("TWITCH_CLIENT_SECRET not set")
-                });
-                let redirect_uri = self.redirect_uri.unwrap_or_else(|| {
-                    std::env::var("TWITCH_REDIRECT_URI")
-                        .unwrap_or_else(|_| "http://localhost:3000/api/oauth/callback".to_string())
-                });
+        let client_id = self.client_id.unwrap_or_else(|| {
+            std::env::var("TWITCH_CLIENT_ID").expect("TWITCH_CLIENT_ID not set")
+        });
+        let client_secret = self.client_secret.unwrap_or_else(|| {
+            std::env::var("TWITCH_CLIENT_SECRET").expect("TWITCH_CLIENT_SECRET not set")
+        });
+        let redirect_uri = self.redirect_uri.unwrap_or_else(|| {
+            std::env::var("TWITCH_REDIRECT_URI")
+                .unwrap_or_else(|_| "http://localhost:3000/api/oauth/callback".to_string())
+        });
 
-                Arc::new(UserTokenManager::new(
-                    client_id,
-                    client_secret,
-                    redirect_uri,
-                ))
-            }
-        };
+        let token_manager = Arc::new(UserTokenManager::new(
+            client_id,
+            client_secret,
+            redirect_uri,
+        ));
 
         token_manager.load_from_db(db.as_ref()).await?;
 
-        let helix = match self.helix {
-            Some(h) => h,
-            None => Arc::new(HelixClient::new()),
-        };
+        let helix = Arc::new(HelixClient::new());
+
+        let twitch_api = Arc::new(TwitchApiClient::new(helix, Arc::clone(&token_manager)));
 
         let stream_lifecycle: Arc<dyn StreamLifecycle> = Arc::new(TwitchStreamLifecycleAdapter);
         let chat_handler: Arc<dyn ChatHandler> = Arc::new(TwitchChatHandlerAdapter);
 
         let lifecycle = Arc::new(TwitchLifecycle::new(stream_lifecycle, chat_handler));
 
-        let eventsub_manager = Arc::new(EventSubManager::new(
-            Arc::clone(&token_manager),
-            helix.clone(),
-            lifecycle,
-        ));
+        let eventsub_manager = Arc::new(EventSubManager::new(twitch_api.clone(), lifecycle));
 
         if self.eventsub_enabled && token_manager.get_access_token().await.is_some() {
             tracing::info!("Twitch user token found, starting EventSub...");
@@ -202,8 +171,7 @@ impl AppServicesBuilder {
 
         let services = AppServices {
             db,
-            token_manager,
-            helix,
+            twitch_api,
             eventsub_manager,
         };
 
@@ -278,11 +246,10 @@ impl AppServices {
     }
 
     fn start_eventsub_watcher(&self) {
-        let token_manager = self.token_manager.clone();
+        let mut rx = self.twitch_api.subscribe_token_changes();
         let eventsub_manager = self.eventsub_manager.clone();
 
         tokio::spawn(async move {
-            let mut rx = token_manager.subscribe_token_changes();
             loop {
                 tokio::select! {
                     _ = rx.recv() => {
