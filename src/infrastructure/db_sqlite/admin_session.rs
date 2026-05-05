@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 use crate::{
     auth_service::{AdminSessionInfo, AdminSessionRepository},
     error::AppResult,
@@ -11,7 +13,7 @@ impl AdminSessionRepository for SqliteDb {
         id: &str,
         twitch_id: &str,
         username: &str,
-        expires_at: chrono::DateTime<chrono::Utc>,
+        expires_at: DateTime<Utc>,
     ) -> AppResult<()> {
         sqlx::query(
             "INSERT INTO admin_sessions (id, provider, provider_id, username, expires_at) VALUES (?, 'twitch', ?, ?, ?)",

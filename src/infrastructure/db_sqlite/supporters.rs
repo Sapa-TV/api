@@ -1,9 +1,34 @@
 use crate::{
-    error::AppResult, infrastructure::db_sqlite::SqliteDb, supporters::SupporterRepository,
+    error::AppResult,
+    infrastructure::db_sqlite::SqliteDb,
+    supporters::{SupporterRepository, SupporterRepositoryData},
 };
 
 #[async_trait::async_trait]
 impl SupporterRepository for SqliteDb {
+    async fn init_supporters(&self, data: SupporterRepositoryData) -> AppResult<()> {
+        let existing_king = self.get_king().await?;
+        if existing_king.is_none() {
+            self.insert_king(&data.king).await?;
+        }
+
+        let existing_last = self.get_day_supporters().await?;
+        if existing_last.is_empty() {
+            for supporter in data.day_supporters {
+                self.insert_day_supporter(&supporter).await?;
+            }
+        }
+
+        let existing_month = self.get_month_supporters().await?;
+        if existing_month.is_empty() {
+            for supporter in data.month_supporters {
+                self.insert_month_supporter(&supporter).await?;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn get_king(&self) -> AppResult<Option<String>> {
         let result: Option<(String,)> =
             sqlx::query_as("SELECT name FROM king ORDER BY id DESC LIMIT 1")
@@ -51,31 +76,4 @@ impl SupporterRepository for SqliteDb {
             .await?;
         Ok(())
     }
-}
-
-const KING_DEFAULT: &str = "Star";
-const DAY_LIST_DEFAULT: &[&str] = &["Echo", "Night Wolf", "Shadow Hunter"];
-const MONTH_LIST_DEFAULT: &[&str] = &["Star", "Echo", "Vortex", "Night Wolf", "Shadow Hunter"];
-
-pub async fn init_supporters<DB: SupporterRepository>(db: &DB) -> AppResult<()> {
-    let existing_king = db.get_king().await?;
-    if existing_king.is_none() {
-        db.insert_king(KING_DEFAULT).await?;
-    }
-
-    let existing_last = db.get_day_supporters().await?;
-    if existing_last.is_empty() {
-        for supporter in DAY_LIST_DEFAULT {
-            db.insert_last_day_supporters(*supporter).await?;
-        }
-    }
-
-    let existing_month = db.get_month_supporters().await?;
-    if existing_month.is_empty() {
-        for supporter in MONTH_LIST_DEFAULT {
-            db.insert_month_supporter(*supporter).await?;
-        }
-    }
-
-    Ok(())
 }

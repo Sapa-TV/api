@@ -1,7 +1,14 @@
-use serde::{Serialize, de::DeserializeOwned};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 
-use crate::error::AppResult;
+use crate::{error::AppResult, providers::twitch::AppTwitchToken};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum TokenEnum {
+    Twitch(AppTwitchToken),
+}
 
 #[derive(Display, EnumString, sqlx::Type)]
 #[strum(serialize_all = "snake_case")]
@@ -20,25 +27,25 @@ pub enum AccountVariant {
     Bot,
 }
 
-pub struct TokenRecord<T: Serialize + DeserializeOwned + Send> {
+pub struct TokenRecord {
     pub account_variant: String,
     pub provider: ProviderVariant,
-    pub token: T,
+    pub token: TokenEnum,
 }
 
 #[async_trait::async_trait]
-pub trait TokenRepository<T: Serialize + DeserializeOwned + Send> {
+pub trait TokenRepository {
     async fn get_provider_token(
         &self,
         provider: ProviderVariant,
         account_variant: AccountVariant,
-    ) -> AppResult<Option<T>>;
+    ) -> AppResult<Option<TokenEnum>>;
     async fn save_provider_token(
         &self,
         account_variant: AccountVariant,
         provider: ProviderVariant,
-        provider_id: String,
-        expires_at: String,
-        token: T,
+        provider_id: &str,
+        expires_at: DateTime<Utc>,
+        token: TokenEnum,
     ) -> AppResult<()>;
 }

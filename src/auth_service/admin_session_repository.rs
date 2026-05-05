@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 use crate::error::AppResult;
 
 pub struct AdminSessionInfo {
@@ -12,7 +14,7 @@ pub trait AdminSessionRepository {
         id: &str,
         twitch_id: &str,
         username: &str,
-        expires_at: chrono::DateTime<chrono::Utc>,
+        expires_at: DateTime<Utc>,
     ) -> AppResult<()>;
     async fn get_admin_session(&self, id: &str) -> AppResult<Option<AdminSessionInfo>>;
     async fn delete_admin_session(&self, id: &str) -> AppResult<()>;

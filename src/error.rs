@@ -1,3 +1,5 @@
+use std::env::VarError;
+
 use axum::{
     Json,
     http::StatusCode,
@@ -16,6 +18,9 @@ pub enum AppError {
 
     #[error("Environment variable error: {0}")]
     Env(String),
+
+    #[error("Environment variable error: {0}")]
+    EnvVar(#[from] VarError),
 
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
@@ -49,6 +54,10 @@ impl IntoResponse for AppError {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
             AppError::Env(msg) => {
+                tracing::error!("Environment error: {}", msg);
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
+            AppError::EnvVar(msg) => {
                 tracing::error!("Environment error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }

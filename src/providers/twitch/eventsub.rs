@@ -1,3 +1,4 @@
+use chrono::Utc;
 use futures_util::{Sink, StreamExt};
 use std::sync::Arc;
 use std::time::Duration;
@@ -199,12 +200,12 @@ impl EventSubClient {
         );
 
         match event {
-            Event::StreamOnlineV1(payload) => {
-                let timestamp = chrono::Utc::now();
+            Event::StreamOnlineV1(_payload) => {
+                let timestamp = Utc::now();
                 self.lifecycle.on_stream_started(timestamp).await?;
             }
-            Event::StreamOfflineV1(payload) => {
-                let timestamp = chrono::Utc::now();
+            Event::StreamOfflineV1(_payload) => {
+                let timestamp = Utc::now();
                 self.lifecycle.on_stream_ended(timestamp).await?;
             }
             Event::ChannelChatMessageV1(payload) => {
@@ -212,7 +213,7 @@ impl EventSubClient {
                     let user_id = event.chatter_user_id.as_str();
                     let username = event.chatter_user_name.as_str();
                     let message = event.message.text.as_str();
-                    let timestamp = chrono::Utc::now();
+                    let timestamp = Utc::now();
                     self.lifecycle
                         .on_chat_message(user_id, username, message, timestamp)
                         .await?;

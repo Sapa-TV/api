@@ -8,6 +8,7 @@ use twitch_api::{
 
 use super::auth::UserTokenManager;
 use crate::error::{AppError, AppResult};
+use crate::providers::token_repository::TokenRepository;
 
 pub struct TwitchApiClient {
     helix: Arc<HelixClient<'static, reqwest::Client>>,
@@ -47,7 +48,7 @@ impl TwitchApiClient {
         self.token_manager.get_oauth_url().await
     }
 
-    pub async fn exchange_code<T: Db + ?Sized>(&self, db: &T, code: &str) -> AppResult<bool> {
+    pub async fn exchange_code<T: TokenRepository>(&self, db: &T, code: &str) -> AppResult<bool> {
         let scopes_valid = self.token_manager.exchange_code(db, code).await?;
         if !scopes_valid {
             self.set_needs_reauth(true);

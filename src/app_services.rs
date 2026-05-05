@@ -1,14 +1,16 @@
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
+use twitch_api::HelixClient;
 
 use crate::app_logic::{ChatHandler, StreamLifecycle};
 use crate::error::AppResult;
+use crate::infrastructure::FullRepository;
 use crate::providers::twitch::auth::UserTokenManager;
 use crate::providers::twitch::client::TwitchApiClient;
 use crate::providers::twitch::eventsub;
 use crate::providers::twitch::lifecycle::TwitchLifecycle;
-use twitch_api::HelixClient;
 
 pub struct EventSubManager {
     api_client: Arc<TwitchApiClient>,
@@ -68,13 +70,13 @@ impl EventSubManager {
 
 #[derive(Clone)]
 pub struct AppServices {
-    pub db: Arc<dyn Db + Send + Sync>,
+    pub db: Arc<dyn FullRepository>,
     pub twitch_api: Arc<TwitchApiClient>,
     eventsub_manager: Arc<EventSubManager>,
 }
 
 pub struct AppServicesBuilder {
-    db: Option<Arc<dyn Db + Send + Sync>>,
+    db: Option<Arc<dyn FullRepository + Send + Sync>>,
     client_id: Option<String>,
     client_secret: Option<String>,
     redirect_uri: Option<String>,
@@ -94,7 +96,7 @@ impl AppServicesBuilder {
         }
     }
 
-    pub fn db(mut self, db: Arc<dyn Db + Send + Sync>) -> Self {
+    pub fn db(mut self, db: Arc<dyn FullRepository>) -> Self {
         self.db = Some(db);
         self
     }
@@ -150,7 +152,7 @@ impl AppServicesBuilder {
 
         let twitch_api = Arc::new(TwitchApiClient::new(helix, Arc::clone(&token_manager)));
 
-        let scopes_valid = token_manager.load_from_db(db.as_ref()).await?;
+        let scopes_valid = token_manager.load_from_db(db).await?;
         if !scopes_valid {
             tracing::warn!("Token scopes do not match required, will need reauthorization");
             twitch_api.set_needs_reauth(true);
@@ -196,20 +198,12 @@ struct TwitchStreamLifecycleAdapter;
 
 #[async_trait::async_trait]
 impl StreamLifecycle for TwitchStreamLifecycleAdapter {
-    async fn on_started(
-        &self,
-        provider: &str,
-        started_at: chrono::DateTime<chrono::Utc>,
-    ) -> AppResult<()> {
+    async fn on_started(&self, provider: &str, started_at: DateTime<Utc>) -> AppResult<()> {
         tracing::info!("[{}] Stream started at {}", provider, started_at);
         Ok(())
     }
 
-    async fn on_ended(
-        &self,
-        provider: &str,
-        ended_at: chrono::DateTime<chrono::Utc>,
-    ) -> AppResult<()> {
+    async fn on_ended(&self, provider: &str, ended_at: DateTime<Utc>) -> AppResult<()> {
         tracing::info!("[{}] Stream ended at {}", provider, ended_at);
         Ok(())
     }
@@ -225,7 +219,7 @@ impl ChatHandler for TwitchChatHandlerAdapter {
         user_id: &str,
         username: &str,
         message: &str,
-        timestamp: chrono::DateTime<chrono::Utc>,
+        timestamp: DateTime<Utc>,
     ) -> AppResult<()> {
         tracing::info!(
             "[{}] Chat message from {} ({}): {} at {}",

@@ -3,7 +3,6 @@ use crate::{
     providers::token_repository::{ProviderVariant, TokenRecord},
     push::PushSubscription,
 };
-use serde::{Serialize, de::DeserializeOwned};
 use sqlx::FromRow;
 
 #[derive(FromRow)]
@@ -32,10 +31,10 @@ pub struct TokenRecordRow {
     pub token: serde_json::Value,
 }
 
-impl<T: DeserializeOwned + Serialize + Send> TryFrom<TokenRecordRow> for TokenRecord<T> {
+impl TryFrom<TokenRecordRow> for TokenRecord {
     type Error = AppError;
     fn try_from(row: TokenRecordRow) -> Result<Self, Self::Error> {
-        let token: T = serde_json::from_value(row.token)?;
+        let token = serde_json::from_value(row.token)?;
 
         Ok(Self {
             account_variant: row.account_variant,

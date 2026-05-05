@@ -18,9 +18,10 @@ use std::sync::Arc;
 use api::router;
 use app_services::AppServices;
 use app_state::create_state;
-use db::{create_db, init_db};
 use error::AppResult;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
+
+use crate::infrastructure::{InitDbData, create_db};
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
@@ -39,7 +40,8 @@ async fn main() -> AppResult<()> {
     println!("Commit: {}", env!("GIT_HASH"));
 
     let db = Arc::new(create_db().await?);
-    init_db(db.as_ref()).await?;
+    let init_db_data = InitDbData::new();
+    db.init(init_db_data).await?;
 
     let state = create_state(db.as_ref()).await?;
     let services = AppServices::builder().db(db.clone()).build().await?;

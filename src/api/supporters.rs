@@ -68,7 +68,7 @@ pub async fn post_king_supporter(
 pub async fn get_month_supporters(
     Extension(state): Extension<AppState>,
 ) -> axum::Json<SupportersResponse> {
-    let month = state.month.read().await;
+    let month = state.month_supporters.read().await;
     axum::Json(SupportersResponse {
         supporters: month.clone(),
     })
@@ -88,8 +88,8 @@ pub async fn post_month_supporter(
     Extension(services): Extension<AppServices>,
     Json(req): Json<SupporterRequest>,
 ) -> AppResult<axum::Json<SupportersResponse>> {
-    services.db.insert_month_donater(&req.name).await?;
-    let mut month = state.month.write().await;
+    services.db.insert_month_supporter(&req.name).await?;
+    let mut month = state.month_supporters.write().await;
     month.push(req.name.clone());
     Ok(axum::Json(SupportersResponse {
         supporters: month.clone(),
@@ -111,7 +111,7 @@ pub async fn post_day_supporter(
     Json(req): Json<SupporterRequest>,
 ) -> AppResult<axum::Json<SupportersResponse>> {
     services.db.insert_day_supporter(&req.name).await?;
-    let mut day_supporter = state.day.write().await;
+    let mut day_supporter = state.day_supporters.write().await;
     day_supporter.push(req.name.clone());
     if day_supporter.len() > 10 {
         day_supporter.remove(0);
@@ -132,7 +132,7 @@ pub async fn post_day_supporter(
 pub async fn get_day_supporters(
     Extension(state): Extension<AppState>,
 ) -> axum::Json<SupportersResponse> {
-    let day_supporters = state.day.read().await;
+    let day_supporters = state.day_supporters.read().await;
     axum::Json(SupportersResponse {
         supporters: day_supporters.clone(),
     })

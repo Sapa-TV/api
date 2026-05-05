@@ -1,4 +1,5 @@
 use axum::http;
+use chrono::Utc;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -13,7 +14,10 @@ use twitch_api::twitch_oauth2::{
     validator,
 };
 
-use crate::error::{AppError, AppResult};
+use crate::{
+    error::{AppError, AppResult},
+    providers::token_repository::{AccountVariant, ProviderVariant, TokenRepository},
+};
 
 macro_rules! define_scopes {
     ($($s:expr),* $(,)?) => {
@@ -35,12 +39,12 @@ define_scopes![
     Scope::ChannelReadStreamKey,
 ];
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StoredToken {
-    pub access_token: String,
-    pub refresh_token: String,
-    pub created_at: String,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct StoredToken {
+//     pub access_token: String,
+//     pub refresh_token: String,
+//     pub created_at: String,
+// }
 
 pub struct UserTokenManager {
     client_id: String,
@@ -70,9 +74,12 @@ impl UserTokenManager {
         self.token_change_tx.subscribe()
     }
 
-    pub async fn load_from_db<T: Db + Send + Sync + ?Sized>(&self, db: &T) -> AppResult<bool> {
+    pub async fn load_from_db<T: TokenRepository>(&self, db: &T) -> AppResult<bool> {
         let mut scopes_valid = true;
-        if let Some(raw_data) = db.get_provider_token("main", "twitch").await? {
+        if let Some(raw_data) = db
+            .get_provider_token(ProviderVariant::Twitch, AccountVariant::Main)
+            .await?
+        {
             if let Ok(stored) = serde_json::from_str::<StoredToken>(&raw_data) {
                 if !stored.refresh_token.is_empty() {
                     tracing::info!("Loaded Twitch token from database, validating...");
@@ -139,11 +146,7 @@ impl UserTokenManager {
         Ok(url.to_string())
     }
 
-    pub async fn exchange_code<T: Db + Send + Sync + ?Sized>(
-        &self,
-        db: &T,
-        code: &str,
-    ) -> AppResult<bool> {
+    pub async fn exchange_code<T: TokenRepository>(&self, db: &T, code: &str) -> AppResult<bool> {
         tracing::info!("Exchanging authorization code for tokens...");
 
         {
@@ -230,8 +233,16 @@ impl UserTokenManager {
         let raw_data = serde_json::to_string(&stored_token)
             .map_err(|e| AppError::Internal(format!("Failed to serialize token: {}", e)))?;
 
-        db.save_provider_token("main", "twitch", user_token.user_id.as_ref(), &raw_data)
-            .await?;
+        let expires_at = Utc::now() + user_token.expires_in();
+
+        db.save_provider_token(
+            AccountVariant::Main,
+            ProviderVariant::Twitch,
+            user_token.user_id.as_str(),
+            expires_at,
+            &raw_data,
+        )
+        .await?;
 
         {
             let mut token_guard = self.token.write().await;
