@@ -4,16 +4,15 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{RwLock, broadcast};
-use twitch_api::twitch_oauth2::Scope;
-use twitch_api::twitch_oauth2::TwitchToken;
-use twitch_api::twitch_oauth2::Validator;
-use twitch_api::twitch_oauth2::tokens::UserToken;
-use twitch_api::twitch_oauth2::tokens::UserTokenBuilder;
-use twitch_api::twitch_oauth2::types::{AccessToken, ClientId, ClientSecret, RefreshToken};
-use twitch_api::twitch_oauth2::url::Url;
-use twitch_api::twitch_oauth2::validator;
+use twitch_api::twitch_oauth2::{
+    Scope, TwitchToken, Validator,
+    tokens::UserToken,
+    tokens::UserTokenBuilder,
+    types::{AccessToken, ClientId, ClientSecret, RefreshToken},
+    url::Url,
+    validator,
+};
 
-use crate::db::Db;
 use crate::error::{AppError, AppResult};
 
 macro_rules! define_scopes {
@@ -73,28 +72,30 @@ impl UserTokenManager {
 
     pub async fn load_from_db<T: Db + Send + Sync + ?Sized>(&self, db: &T) -> AppResult<bool> {
         let mut scopes_valid = true;
-        if let Some(stored) = db.get_twitch_token().await? {
-            if !stored.refresh_token.is_empty() {
-                tracing::info!("Loaded Twitch token from database, validating...");
+        if let Some(raw_data) = db.get_provider_token("main", "twitch").await? {
+            if let Ok(stored) = serde_json::from_str::<StoredToken>(&raw_data) {
+                if !stored.refresh_token.is_empty() {
+                    tracing::info!("Loaded Twitch token from database, validating...");
 
-                let user_token = UserToken::from_existing_or_refresh_token(
-                    &self.http_client,
-                    AccessToken::new(stored.access_token),
-                    RefreshToken::new(stored.refresh_token),
-                    ClientId::new(self.client_id.clone()),
-                    ClientSecret::new(self.client_secret.clone()),
-                )
-                .await
-                .map_err(|e| {
-                    AppError::Internal(format!("Failed to validate stored token: {}", e))
-                })?;
+                    let user_token = UserToken::from_existing_or_refresh_token(
+                        &self.http_client,
+                        AccessToken::new(stored.access_token),
+                        RefreshToken::new(stored.refresh_token),
+                        ClientId::new(self.client_id.clone()),
+                        ClientSecret::new(self.client_secret.clone()),
+                    )
+                    .await
+                    .map_err(|e| {
+                        AppError::Internal(format!("Failed to validate stored token: {}", e))
+                    })?;
 
-                let mut token_guard = self.token.write().await;
-                *token_guard = Some(user_token.clone());
+                    let mut token_guard = self.token.write().await;
+                    *token_guard = Some(user_token.clone());
 
-                if !TWITCH_SCOPES_VALIDATOR.matches(user_token.scopes()) {
-                    tracing::warn!("Token scopes do not match required scopes");
-                    scopes_valid = false;
+                    if !TWITCH_SCOPES_VALIDATOR.matches(user_token.scopes()) {
+                        tracing::warn!("Token scopes do not match required scopes");
+                        scopes_valid = false;
+                    }
                 }
             }
         }
@@ -226,7 +227,11 @@ impl UserTokenManager {
             created_at: format!("{:?}", SystemTime::now()),
         };
 
-        db.save_twitch_token(&stored_token).await?;
+        let raw_data = serde_json::to_string(&stored_token)
+            .map_err(|e| AppError::Internal(format!("Failed to serialize token: {}", e)))?;
+
+        db.save_provider_token("main", "twitch", user_token.user_id.as_ref(), &raw_data)
+            .await?;
 
         {
             let mut token_guard = self.token.write().await;

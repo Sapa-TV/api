@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-
 use tokio::sync::broadcast;
-use twitch_api::HelixClient;
-use twitch_api::eventsub::{EventSubscription, Transport};
+use twitch_api::{
+    HelixClient,
+    eventsub::{EventSubscription, Transport},
+};
 
 use super::auth::UserTokenManager;
-use crate::db::Db;
 use crate::error::{AppError, AppResult};
 
 pub struct TwitchApiClient {

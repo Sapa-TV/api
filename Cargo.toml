@@ -39,3 +39,8 @@ rustls = { version = "0.23.40", features = [
     "tls12",
 ], default-features = false }
 chrono = { version = "0.4.44", features = ["clock", "serde"] }
+async-openai = { version = "0.36.1", features = ["_api", "chat-completion", "chatkit"] }
+axum-extra = { version = "0.12.6", features = ["cookie"] }
+uuid = { version = "1.23.1", features = ["v4", "serde"] }
+time = "0.3.47"
+strum = { version = "0.28.0", features = ["derive"] }

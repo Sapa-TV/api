@@ -3,7 +3,10 @@ use web_push_native::{
     Auth, WebPushBuilder, jwt_simple::algorithms::ES256KeyPair, p256::PublicKey,
 };
 
-use crate::db::PushSubscription;
+mod repository;
+
+pub use repository::PushSubscription;
+pub use repository::PushSubscriptionRepository;
 
 pub struct PushClient {
     client: reqwest::Client,

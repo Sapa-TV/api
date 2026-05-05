@@ -3,7 +3,6 @@ use tokio::sync::RwLock;
 use tokio::sync::broadcast;
 
 use crate::app_logic::{ChatHandler, StreamLifecycle};
-use crate::db::Db;
 use crate::error::AppResult;
 use crate::providers::twitch::auth::UserTokenManager;
 use crate::providers::twitch::client::TwitchApiClient;

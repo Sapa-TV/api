@@ -1,3 +1,4 @@
+pub mod token_repository;
 pub mod twitch;
 
 use std::sync::Arc;

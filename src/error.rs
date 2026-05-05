@@ -20,8 +20,13 @@ pub enum AppError {
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
+    #[error("Parsing JSON error: {0}")]
+    Parsing(#[from] serde_json::Error),
+
     #[error("Internal server error: {0}")]
-    #[allow(dead_code)]
     Internal(String),
 }
 
@@ -49,7 +54,15 @@ impl IntoResponse for AppError {
             }
             AppError::Unauthorized(msg) => {
                 tracing::warn!("Unauthorized: {}", msg);
-                (StatusCode::OK, self.to_string())
+                (StatusCode::UNAUTHORIZED, self.to_string())
+            }
+            AppError::Forbidden(msg) => {
+                tracing::warn!("Forbidden: {}", msg);
+                (StatusCode::FORBIDDEN, self.to_string())
+            }
+            AppError::Parsing(msg) => {
+                tracing::warn!("Parsing error: {}", msg);
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);

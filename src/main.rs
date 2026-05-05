@@ -2,11 +2,14 @@ mod api;
 mod app_logic;
 mod app_services;
 mod app_state;
-mod db;
+mod auth_service;
 mod error;
+mod infrastructure;
 mod providers;
 mod push;
+mod supporters;
 
+use dotenvy::dotenv;
 use rustls::crypto::CryptoProvider;
 
 use std::net::SocketAddr;
@@ -21,6 +24,8 @@ use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
+    dotenv().ok();
+
     CryptoProvider::install_default(rustls::crypto::ring::default_provider())
         .expect("Failed to install crypto provider");
 
