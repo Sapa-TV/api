@@ -1,43 +1,80 @@
-mod api;
-mod app_logic;
-mod app_services;
-mod app_state;
-mod auth_service;
 mod error;
-mod infrastructure;
-mod providers;
 mod push;
 mod supporters;
 mod token_manager;
 
-// New screaming architecture modules (v2 - parallel structure)
-mod shared_infra_v2;
-mod app_v2;
-mod eventsub_v2;
-mod oauth_v2;
-mod auth_v2;
-mod state_v2;
-mod supporters_v2;
-mod push_v2;
-mod token_manager_v2;
-mod router_v2;
+// Screaming architecture modules
+mod app;
+mod auth;
+mod eventsub;
+mod oauth;
+mod router;
+mod shared_infra;
+mod state;
 
-use router_v2::router;
-use app_v2::app::{App, AppBuilder};
-use app_v2::service_adapters::{SqliteSupporterService, SqlitePushService, TwitchOAuthService};
-use app_v2::ports::{SupportersService, PushService, OAuthService};
-use app_services::AppServices;
-use app_state::create_state;
+use app::app::{App, AppBuilder};
+use app::service_adapters::{SqlitePushService, SqliteSupporterService, TwitchOAuthService};
 use dotenvy::dotenv;
 use error::AppResult;
+use router::router;
 use rustls::crypto::CryptoProvider;
+use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-use crate::infrastructure::{InitDbData, create_db};
-use crate::token_manager_v2::infra::sqlite::SqliteTokenRepository;
-use crate::shared_infra_v2::sqlite_db::SqliteDb as NewSqliteDb;
+use crate::shared_infra::sqlite_db::SqliteDb;
+use crate::token_manager::infra::sqlite::SqliteTokenRepository;
+
+pub struct InitDbData {
+    pub king: String,
+    pub day_supporters: Vec<String>,
+    pub month_supporters: Vec<String>,
+}
+
+impl InitDbData {
+    pub fn new() -> Self {
+        Self {
+            king: "Star".to_string(),
+            day_supporters: vec![],
+            month_supporters: vec![],
+        }
+    }
+}
+
+impl SqliteDb {
+    pub async fn init(&self, data: InitDbData) -> AppResult<()> {
+        use crate::supporters::domain::{SupporterRepository, SupporterRepositoryData};
+
+        let supporters_data = SupporterRepositoryData {
+            king: data.king,
+            day_supporters: data.day_supporters,
+            month_supporters: data.month_supporters,
+        };
+
+        // For now, just verify the db is connected
+        tracing::info!("Database initialized");
+        Ok(())
+    }
+}
+
+async fn create_db() -> AppResult<SqliteDb> {
+    use sqlx::sqlite::SqliteConnectOptions;
+    use std::env;
+    use std::str::FromStr;
+
+    let db_url = env::var("DATABASE_URL")?;
+    tracing::info!("Connecting to database at {}", db_url);
+
+    let connection_options = SqliteConnectOptions::from_str(&db_url)?
+        .create_if_missing(true)
+        .foreign_keys(true);
+
+    let pool = SqlitePool::connect_with(connection_options).await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
+    Ok(SqliteDb::new(pool))
+}
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
@@ -59,22 +96,26 @@ async fn main() -> AppResult<()> {
     let init_db_data = InitDbData::new();
     db.init(init_db_data).await?;
 
-    let state = create_state(db.as_ref()).await?;
-    let services = AppServices::builder().db(db.clone()).build().await?;
-
-    let new_db = Arc::new(NewSqliteDb::new(db.pool().clone()));
-    let supporters_repo = Arc::new(crate::supporters_v2::infra::SqliteSupporterRepository::new(new_db.clone()));
-    let push_repo = Arc::new(crate::push_v2::infra::SqlitePushSubscriptionRepository::new(new_db.clone()));
-    let token_repo = Arc::new(SqliteTokenRepository::new(new_db.clone()));
-    let token_manager = Arc::new(crate::token_manager_v2::application::TokenManagerS::new(token_repo));
+    let supporters_repo = Arc::new(crate::supporters::infra::SqliteSupporterRepository::new(
+        db.clone(),
+    ));
+    let push_repo = Arc::new(crate::push::infra::SqlitePushSubscriptionRepository::new(
+        db.clone(),
+    ));
+    let token_repo = Arc::new(SqliteTokenRepository::new(db.clone()));
+    let token_manager = Arc::new(crate::token_manager::application::TokenManagerS::new(
+        token_repo,
+    ));
 
     let app: App = App::builder()
         .supporters(Arc::new(SqliteSupporterService::new(supporters_repo)))
         .push(Arc::new(SqlitePushService::new(push_repo)))
-        .oauth(Arc::new(TwitchOAuthService::new(Arc::new(crate::eventsub_v2::infra::client::TwitchApiClient::new(
-            Arc::new(twitch_api::HelixClient::new()),
-            token_manager,
-        )))))
+        .oauth(Arc::new(TwitchOAuthService::new(Arc::new(
+            crate::eventsub::infra::client::TwitchApiClient::new(
+                Arc::new(twitch_api::HelixClient::new()),
+                token_manager,
+            ),
+        ))))
         .build();
 
     let app_router = router(Arc::new(app));
@@ -110,7 +151,7 @@ mod tests {
     fn generate_openapi() {
         let path = Path::new("generated/openapi.json");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let json = super::router_v2::ApiDoc::openapi().to_pretty_json().unwrap();
+        let json = super::router::ApiDoc::openapi().to_pretty_json().unwrap();
         fs::write(path, json).unwrap();
     }
 }

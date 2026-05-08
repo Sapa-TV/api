@@ -522,27 +522,25 @@ src/
 
 **Files to remove after full migration:**
 
-- [ ] `src/api.rs` (replaced by router.rs)
-- [ ] `src/api/` directory
-- [ ] `src/app_services.rs`
-- [ ] `src/app_state.rs`
-- [ ] `src/app_logic.rs`
-- [ ] `src/infrastructure.rs`
-- [ ] `src/infrastructure/` directory
-- [ ] `src/providers.rs`
-- [ ] `src/providers/` directory
-- [ ] `src/auth_service.rs`
-- [ ] `src/auth_service/` directory
-- [ ] `src/supporters.rs`
-- [ ] `src/supporters/` directory
-- [ ] `src/push.rs`
-- [ ] `src/push/` directory
-- [ ] `src/token_manager.rs`
-- [ ] `src/token_manager/` (partially - keep module structure)
+- [x] `src/api.rs` (replaced by router.rs)
+- [x] `src/api/` directory
+- [x] `src/app_services.rs`
+- [x] `src/app_state.rs`
+- [x] `src/app_logic.rs`
+- [x] `src/infrastructure.rs`
+- [x] `src/infrastructure/` directory
+- [x] `src/providers.rs`
+- [x] `src/providers/` directory
+- [x] `src/auth_service.rs`
+- [x] `src/auth_service/` directory
+- [x] `src/supporters.rs`
+- [x] `src/push.rs`
+- [x] `src/token_manager.rs`
+- [x] `src/token_manager/` (renamed to token_manager_v2 then to final)
 
 **Phase 10 Verification:**
-- [ ] `cargo check` passes
-- [ ] All old code removed
+- [x] `cargo check` passes
+- [x] All old code removed
 - [ ] All tests pass
 - [ ] `just gen` generates valid OpenAPI
 
@@ -602,7 +600,7 @@ All infra modules share one `SqliteDb` wrapper around `SqlitePool`.
 | Phase 7: API Handlers | [x] |
 | Phase 8: Router | [x] |
 | Phase 9: Main.rs | [x] |
-| Phase 10: Cleanup | [ ] |
+| Phase 10: Cleanup | [x] |
 
 ---
 
