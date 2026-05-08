@@ -1,25 +1,16 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use strum::{Display, EnumString};
+use sqlx::prelude::Type;
 
-use crate::{error::AppResult, providers::twitch::AppTwitchToken};
+use crate::{error::AppResult, token_manager::TokenEnum};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(untagged)]
-pub enum TokenEnum {
-    Twitch(AppTwitchToken),
-}
-
-#[derive(Display, EnumString, sqlx::Type)]
-#[strum(serialize_all = "snake_case")]
+#[derive(Type, Hash, PartialEq, Eq)]
 #[sqlx(type_name = "text")]
 #[sqlx(rename_all = "lowercase")]
 pub enum ProviderVariant {
     Twitch,
 }
 
-#[derive(Display, EnumString, sqlx::Type)]
-#[strum(serialize_all = "snake_case")]
+#[derive(Type, Hash, PartialEq, Eq)]
 #[sqlx(type_name = "text")]
 #[sqlx(rename_all = "lowercase")]
 pub enum AccountVariant {
@@ -28,7 +19,7 @@ pub enum AccountVariant {
 }
 
 pub struct TokenRecord {
-    pub account_variant: String,
+    pub account_variant: AccountVariant,
     pub provider: ProviderVariant,
     pub token: TokenEnum,
 }
@@ -42,8 +33,8 @@ pub trait TokenRepository {
     ) -> AppResult<Option<TokenEnum>>;
     async fn save_provider_token(
         &self,
-        account_variant: AccountVariant,
         provider: ProviderVariant,
+        account_variant: AccountVariant,
         provider_id: &str,
         expires_at: DateTime<Utc>,
         token: TokenEnum,

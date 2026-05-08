@@ -48,7 +48,11 @@ impl TwitchApiClient {
         self.token_manager.get_oauth_url().await
     }
 
-    pub async fn exchange_code<T: TokenRepository>(&self, db: &T, code: &str) -> AppResult<bool> {
+    pub async fn exchange_code<T: TokenRepository + ?Sized>(
+        &self,
+        db: &T,
+        code: &str,
+    ) -> AppResult<bool> {
         let scopes_valid = self.token_manager.exchange_code(db, code).await?;
         if !scopes_valid {
             self.set_needs_reauth(true);

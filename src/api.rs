@@ -6,8 +6,8 @@ use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::app_services::AppServices;
 use crate::app_state::AppState;
+use crate::{app_services::AppServices, infrastructure::FullRepository};
 
 pub use auth::*;
 pub use health::*;
@@ -38,7 +38,10 @@ mod supporters;
 #[allow(dead_code)]
 pub struct ApiDoc;
 
-pub fn router(state: AppState, services: AppServices) -> Router {
+pub fn router<R>(state: AppState, services: AppServices<R>) -> Router
+where
+    R: FullRepository + Clone,
+{
     Router::new()
         .route("/api/health", get(health))
         .route(

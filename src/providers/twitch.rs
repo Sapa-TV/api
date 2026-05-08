@@ -2,6 +2,7 @@ pub mod auth;
 pub mod client;
 pub mod eventsub;
 pub mod lifecycle;
+pub mod token_provider;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

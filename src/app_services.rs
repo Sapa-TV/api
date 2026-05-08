@@ -11,6 +11,7 @@ use crate::providers::twitch::auth::UserTokenManager;
 use crate::providers::twitch::client::TwitchApiClient;
 use crate::providers::twitch::eventsub;
 use crate::providers::twitch::lifecycle::TwitchLifecycle;
+use crate::token_manager::TokenManagerS;
 
 pub struct EventSubManager {
     api_client: Arc<TwitchApiClient>,
@@ -69,8 +70,9 @@ impl EventSubManager {
 }
 
 #[derive(Clone)]
-pub struct AppServices {
-    pub db: Arc<dyn FullRepository>,
+pub struct AppServices<R: FullRepository> {
+    pub db: Arc<R>,
+    pub token_manager: Arc<TokenManagerS<R>>,
     pub twitch_api: Arc<TwitchApiClient>,
     eventsub_manager: Arc<EventSubManager>,
 }
@@ -142,11 +144,11 @@ impl AppServicesBuilder {
                 .unwrap_or_else(|_| "http://localhost:3000/api/oauth/callback".to_string())
         });
 
-        let token_manager = Arc::new(UserTokenManager::new(
-            client_id,
-            client_secret,
-            redirect_uri,
-        ));
+        // let token_manager = Arc::new(UserTokenManager::new(
+        //     client_id,
+        //     client_secret,
+        //     redirect_uri,
+        // ));
 
         let helix = Arc::new(HelixClient::new());
 
