@@ -46,6 +46,10 @@ impl SqliteDb {
         Self { pool }
     }
 
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     pub async fn init(&self, data: InitDbData) -> AppResult<()> {
         let supporters_data = SupporterRepositoryData {
             king: data.king,

@@ -1,12 +1,6 @@
 use crate::error::AppResult;
 
-#[derive(Debug, Clone)]
-pub struct PushSubscription {
-    pub endpoint: String,
-    pub p256dh: String,
-    pub auth: String,
-    pub user_id: Option<String>,
-}
+pub use crate::push::PushSubscription;
 
 #[async_trait::async_trait]
 pub trait PushSubscriptionRepository: Send + Sync {

@@ -76,44 +76,44 @@ src/
 
 ## Phase 1: Create Feature Modules (Scaffolding)
 
-- [ ] **1.1** Create `src/supporters/module.rs` with:
+- [x] **1.1** Create `src/supporters/module.rs` with:
   ```rust
   pub mod api;
   pub mod domain;
   pub mod infra;
   ```
-- [ ] **1.2** Create `src/push/module.rs` with:
+- [x] **1.2** Create `src/push/module.rs` with:
   ```rust
   pub mod api;
   pub mod domain;
   pub mod infra;
   pub mod client;
   ```
-- [ ] **1.3** Create `src/oauth/module.rs` with:
+- [x] **1.3** Create `src/oauth/module.rs` with:
   ```rust
   pub mod api;
   pub mod domain;
   pub mod infra;
   ```
-- [ ] **1.4** Create `src/token_manager/module.rs` with:
+- [x] **1.4** Create `src/token_manager/module.rs` with:
   ```rust
   pub mod domain;
   pub mod application;
   pub mod infra;
   ```
-- [ ] **1.5** Create `src/eventsub/module.rs` with:
+- [x] **1.5** Create `src/eventsub/module.rs` with:
   ```rust
   pub mod domain;
   pub mod application;
   pub mod infra;
   ```
-- [ ] **1.6** Create `src/auth/module.rs` with:
+- [x] **1.6** Create `src/auth/module.rs` with:
   ```rust
   pub mod api;
   pub mod domain;
   pub mod infra;
   ```
-- [ ] **1.7** Create `src/state/module.rs` with:
+- [x] **1.7** Create `src/state/module.rs` with:
   ```rust
   pub mod domain;
   pub mod application;
@@ -121,7 +121,7 @@ src/
   ```
 
 **Verification:**
-- [ ] `cargo check` passes
+- [x] `cargo check` passes
 
 ---
 
@@ -134,9 +134,9 @@ src/
 - `SupporterRepositoryData` struct
 - `SupporterRepository` trait (all methods)
 
-- [ ] Create `src/supporters/domain.rs`
-- [ ] Move `SupporterRepositoryData`
-- [ ] Move `SupporterRepository` trait
+- [x] Create `src/supporters/domain.rs`
+- [x] Move `SupporterRepositoryData`
+- [x] Move `SupporterRepository` trait
 
 ### 2.2 push/domain.rs
 
@@ -145,9 +145,9 @@ src/
 - `PushSubscription` struct
 - `PushSubscriptionRepository` trait
 
-- [ ] Create `src/push/domain.rs`
-- [ ] Move `PushSubscription`
-- [ ] Move `PushSubscriptionRepository`
+- [x] Create `src/push/domain.rs`
+- [x] Move `PushSubscription`
+- [x] Move `PushSubscriptionRepository`
 
 ### 2.3 oauth/domain.rs
 
@@ -157,10 +157,10 @@ src/
 - `TWITCH_SCOPES` constant
 - `TWITCH_SCOPES_VALIDATOR` constant
 
-- [ ] Create `src/oauth/domain.rs`
-- [ ] Move `TWITCH_SCOPES` from `providers/twitch/auth.rs`
-- [ ] Move `TWITCH_SCOPES_VALIDATOR`
-- [ ] Create `OAuthService` trait stub
+- [x] Create `src/oauth/domain.rs`
+- [x] Move `TWITCH_SCOPES` from `providers/twitch/auth.rs`
+- [x] Move `TWITCH_SCOPES_VALIDATOR`
+- [x] Create `OAuthService` trait stub
 
 ### 2.4 token_manager/domain.rs
 
@@ -173,13 +173,13 @@ src/
 - `TokenRepository` trait
 - `TokenProvider` trait
 
-- [ ] Create `src/token_manager/domain.rs`
-- [ ] Move `ProviderVariant` from `providers/token_repository.rs`
-- [ ] Move `AccountVariant`
-- [ ] Move `TokenRecord`
-- [ ] Move `TokenEnum`
-- [ ] Move `TokenRepository` trait
-- [ ] Move `TokenProvider` trait from `token_manager/token_provider.rs`
+- [x] Create `src/token_manager/domain.rs`
+- [x] Move `ProviderVariant` from `providers/token_repository.rs`
+- [x] Move `AccountVariant`
+- [x] Move `TokenRecord`
+- [x] Move `TokenEnum`
+- [x] Move `TokenRepository` trait
+- [x] Move `TokenProvider` trait from `token_manager/token_provider.rs`
 
 ### 2.5 eventsub/domain.rs
 
@@ -188,9 +188,9 @@ src/
 - `StreamLifecycle` trait
 - `ChatHandler` trait
 
-- [ ] Create `src/eventsub/domain.rs`
-- [ ] Move `StreamLifecycle` trait
-- [ ] Move `ChatHandler` trait
+- [x] Create `src/eventsub/domain.rs`
+- [x] Move `StreamLifecycle` trait
+- [x] Move `ChatHandler` trait
 
 ### 2.6 auth/domain.rs
 
@@ -200,10 +200,10 @@ src/
 - `AdminSessionRepository` trait
 - `AdminWhiteListRepository` trait
 
-- [ ] Create `src/auth/domain.rs`
-- [ ] Move `AdminSessionInfo`
-- [ ] Move `AdminSessionRepository`
-- [ ] Move `AdminWhiteListRepository`
+- [x] Create `src/auth/domain.rs`
+- [x] Move `AdminSessionInfo`
+- [x] Move `AdminSessionRepository`
+- [x] Move `AdminWhiteListRepository`
 
 ### 2.7 state/domain.rs
 
@@ -211,12 +211,12 @@ src/
 **Contents:**
 - `StateRepository` trait
 
-- [ ] Create `src/state/domain.rs`
-- [ ] Create `StateRepository` trait
+- [x] Create `src/state/domain.rs`
+- [x] Create `StateRepository` trait
 
 **Phase 2 Verification:**
-- [ ] `cargo check` passes
-- [ ] No infra imports in domain modules
+- [x] `cargo check` passes
+- [x] No infra imports in domain modules
 
 ---
 
@@ -229,13 +229,13 @@ src/
 **From:** `src/infrastructure/db_sqlite.rs` (refactor)
 **Contents:** `SqliteDb` struct wrapping `SqlitePool`
 
-- [ ] Create `src/shared_infra.rs`
-- [ ] Create `src/shared_infra/sqlite_db.rs`
-- [ ] Move `SqliteDb` struct (or recreate)
-- [ ] Add `pool()` method returning `&SqlitePool`
+- [x] Create `src/shared_infra.rs`
+- [x] Create `src/shared_infra/sqlite_db.rs`
+- [x] Move `SqliteDb` struct (or recreate)
+- [x] Add `pool()` method returning `&SqlitePool`
 
 **Phase 3 Verification:**
-- [ ] `cargo check` passes
+- [x] `cargo check` passes
 
 ---
 
@@ -248,9 +248,9 @@ src/
 - `SqliteSupporterRepository` struct
 - Implementation of `SupporterRepository`
 
-- [ ] Create `src/supporters/infra.rs`
-- [ ] Create `SqliteSupporterRepository` struct
-- [ ] Implement `SupporterRepository`
+- [x] Create `src/supporters/infra.rs`
+- [x] Create `SqliteSupporterRepository` struct
+- [x] Implement `SupporterRepository`
 
 ### 4.2 push/infra.rs
 
@@ -260,11 +260,11 @@ src/
 - `PushSubscriptionRow` → `PushSubscription` conversion
 - Implementation of `PushSubscriptionRepository`
 
-- [ ] Create `src/push/infra.rs`
-- [ ] Create `SqlitePushSubscriptionRepository` struct
-- [ ] Move `PushSubscriptionRow` from `models.rs`
-- [ ] Move `From<PushSubscriptionRow> for PushSubscription`
-- [ ] Implement `PushSubscriptionRepository`
+- [x] Create `src/push/infra.rs`
+- [x] Create `SqlitePushSubscriptionRepository` struct
+- [x] Move `PushSubscriptionRow` from `models.rs`
+- [x] Move `From<PushSubscriptionRow> for PushSubscription`
+- [x] Implement `PushSubscriptionRepository`
 
 ### 4.3 oauth/infra.rs
 
@@ -273,11 +273,11 @@ src/
 - `TwitchOAuthProvider` struct implementing `OAuthService`
 - `TWITCH_SCOPES_VALIDATOR` (if not in domain)
 
-- [ ] Create `src/oauth/infra.rs`
-- [ ] Move `TwitchTokenProvider` from `providers/twitch/token_provider.rs`
-- [ ] Rename to `TwitchOAuthProvider`
-- [ ] Implement `OAuthService`
-- [ ] Move `TWITCH_SCOPES_VALIDATOR` if needed
+- [x] Create `src/oauth/infra.rs`
+- [x] Move `TwitchTokenProvider` from `providers/twitch/token_provider.rs`
+- [x] Rename to `TwitchOAuthProvider`
+- [x] Implement `OAuthService`
+- [x] Move `TWITCH_SCOPES_VALIDATOR` if needed
 
 ### 4.4 token_manager/infra/sqlite.rs
 
@@ -287,12 +287,12 @@ src/
 - `TokenRecordRow` → `TokenRecord` conversion
 - Implementation of `TokenRepository`
 
-- [ ] Create `src/token_manager/infra/mod.rs`
-- [ ] Create `src/token_manager/infra/sqlite.rs`
-- [ ] Move `TokenRecordRow` from `models.rs`
-- [ ] Move `TryFrom<TokenRecordRow> for TokenRecord`
-- [ ] Create `SqliteTokenRepository` struct
-- [ ] Implement `TokenRepository`
+- [x] Create `src/token_manager/infra/mod.rs`
+- [x] Create `src/token_manager/infra/sqlite.rs`
+- [x] Move `TokenRecordRow` from `models.rs`
+- [x] Move `TryFrom<TokenRecordRow> for TokenRecord`
+- [x] Create `SqliteTokenRepository` struct
+- [x] Implement `TokenRepository`
 
 ### 4.5 eventsub/infra/client.rs
 
@@ -301,11 +301,11 @@ src/
 - `TwitchApiClient` struct
 - `TwitchApiClientTrait` trait (new abstraction)
 
-- [ ] Create `src/eventsub/infra/mod.rs`
-- [ ] Create `src/eventsub/infra/client.rs`
-- [ ] Create `TwitchApiClientTrait` trait
-- [ ] Move `TwitchApiClient` struct
-- [ ] Make it implement `TwitchApiClientTrait`
+- [x] Create `src/eventsub/infra/mod.rs`
+- [x] Create `src/eventsub/infra/client.rs`
+- [x] Create `TwitchApiClientTrait` trait
+- [x] Move `TwitchApiClient` struct
+- [x] Make it implement `TwitchApiClientTrait`
 
 ### 4.6 eventsub/infra/listener.rs
 
@@ -315,10 +315,10 @@ src/
 - `start_eventsub_task()` function
 - `create_eventsub_shutdown_channel()` function
 
-- [ ] Create `src/eventsub/infra/listener.rs`
-- [ ] Move `EventSubClient`
-- [ ] Move `start_eventsub_task`
-- [ ] Move `create_eventsub_shutdown_channel`
+- [x] Create `src/eventsub/infra/listener.rs`
+- [x] Move `EventSubClient`
+- [x] Move `start_eventsub_task`
+- [x] Move `create_eventsub_shutdown_channel`
 
 ### 4.7 auth/infra.rs
 
@@ -328,10 +328,10 @@ src/
 - `SqliteAdminWhiteListRepository` struct
 - Implementation of both traits
 
-- [ ] Create `src/auth/infra.rs`
-- [ ] Move `SqliteAdminSessionRepository` from `admin_session.rs`
-- [ ] Move `SqliteAdminWhiteListRepository` from `admin_whitelist.rs`
-- [ ] Implement traits
+- [x] Create `src/auth/infra.rs`
+- [x] Move `SqliteAdminSessionRepository` from `admin_session.rs`
+- [x] Move `SqliteAdminWhiteListRepository` from `admin_whitelist.rs`
+- [x] Implement traits
 
 ### 4.8 state/infra/in_memory.rs
 
@@ -339,14 +339,14 @@ src/
 **Contents:**
 - `InMemoryStateRepository` struct
 
-- [ ] Create `src/state/infra/mod.rs`
-- [ ] Create `src/state/infra/in_memory.rs`
-- [ ] Create `InMemoryStateRepository`
-- [ ] Implement `StateRepository`
+- [x] Create `src/state/infra/mod.rs`
+- [x] Create `src/state/infra/in_memory.rs`
+- [x] Create `InMemoryStateRepository`
+- [x] Implement `StateRepository`
 
 **Phase 4 Verification:**
-- [ ] `cargo check` passes
-- [ ] All infra modules have no domain dependencies on each other
+- [x] `cargo check` passes
+- [x] All infra modules have no domain dependencies on each other
 
 ---
 
@@ -359,10 +359,10 @@ src/
 - `TokenManagerS` struct
 - All methods with `Arc<dyn TokenRepository>` (not FullRepository)
 
-- [ ] Create `src/token_manager/application.rs`
-- [ ] Create `TokenManagerS` struct
-- [ ] Change field from `Arc<dyn FullRepository>` to `Arc<dyn TokenRepository>`
-- [ ] Move all methods from `token_manager.rs`
+- [x] Create `src/token_manager/application.rs`
+- [x] Create `TokenManagerS` struct
+- [x] Change field from `Arc<dyn FullRepository>` to `Arc<dyn TokenRepository>`
+- [x] Move all methods from `token_manager.rs`
 
 ### 5.2 eventsub/application.rs
 
@@ -373,12 +373,12 @@ src/
 - `TwitchChatHandlerAdapter` struct
 - `EventSubManager` struct
 
-- [ ] Create `src/eventsub/application.rs`
-- [ ] Move `TwitchStreamLifecycleAdapter`
-- [ ] Move `TwitchChatHandlerAdapter`
-- [ ] Move `TwitchLifecycle`
-- [ ] Move `EventSubManager`
-- [ ] Change `EventSubManager` to use `Arc<dyn TwitchApiClientTrait>`
+- [x] Create `src/eventsub/application.rs`
+- [x] Move `TwitchStreamLifecycleAdapter`
+- [x] Move `TwitchChatHandlerAdapter`
+- [x] Move `TwitchLifecycle`
+- [x] Move `EventSubManager`
+- [x] Change `EventSubManager` to use `Arc<dyn TwitchApiClientTrait>`
 
 ### 5.3 state/application.rs
 
@@ -388,14 +388,14 @@ src/
 - `StateManager` struct
 - `create_state()` function
 
-- [ ] Create `src/state/application.rs`
-- [ ] Create `AppState` (rename to avoid conflict with axum Extension)
-- [ ] Create `StateManager`
-- [ ] Move `create_state()`
+- [x] Create `src/state/application.rs`
+- [x] Create `AppState` (rename to avoid conflict with axum Extension)
+- [x] Create `StateManager`
+- [x] Move `create_state()`
 
 **Phase 5 Verification:**
-- [ ] `cargo check` passes
-- [ ] Application services depend only on domain traits
+- [x] `cargo check` passes
+- [x] Application services depend only on domain traits
 
 ---
 
@@ -412,11 +412,11 @@ src/
 - `TokenService` trait
 - `StateRepository` trait (if exposed to handlers)
 
-- [ ] Create `src/app/ports.rs`
-- [ ] Define `SupportersService`
-- [ ] Define `PushService`
-- [ ] Define `OAuthService`
-- [ ] Define `TokenService`
+- [x] Create `src/app/ports.rs`
+- [x] Define `SupportersService`
+- [x] Define `PushService`
+- [x] Define `OAuthService`
+- [x] Define `TokenService`
 
 ### 6.2 app/mod.rs
 
@@ -425,15 +425,15 @@ src/
 - `App` struct (DI container)
 - `AppBuilder` (builder pattern)
 
-- [ ] Create `src/app/mod.rs`
-- [ ] Create `App` struct with all service arcs
-- [ ] Create `AppBuilder`
-- [ ] Implement builder methods for each service
-- [ ] Move `PushClient` initialization here (DI for PushClient)
+- [x] Create `src/app/mod.rs`
+- [x] Create `App` struct with all service arcs
+- [x] Create `AppBuilder`
+- [x] Implement builder methods for each service
+- [x] Move `PushClient` initialization here (DI for PushClient)
 
 **Phase 6 Verification:**
-- [ ] `cargo check` passes
-- [ ] No circular dependencies
+- [x] `cargo check` passes
+- [x] No circular dependencies
 
 ---
 
@@ -444,41 +444,41 @@ src/
 **From:** `src/api/supporters.rs`
 **Changes:** Use `SupportersService` trait instead of `AppServices`
 
-- [ ] Create `src/supporters/api.rs`
-- [ ] Move all handlers from `api/supporters.rs`
-- [ ] Change `Extension<AppServices>` to `Extension<Arc<dyn SupportersService>>`
-- [ ] Change handlers to use service trait methods
+- [x] Create `src/supporters/api.rs`
+- [x] Move all handlers from `api/supporters.rs`
+- [x] Change `Extension<AppServices>` to `Extension<Arc<dyn SupportersService>>`
+- [x] Change handlers to use service trait methods
 
 ### 7.2 push/api.rs
 
 **From:** `src/api/push_subscriptions.rs`
 **Changes:** Use `PushService` trait
 
-- [ ] Create `src/push/api.rs`
-- [ ] Move all handlers
-- [ ] Change extensions to use `PushService`
-- [ ] `PushClient` injected via `App`
+- [x] Create `src/push/api.rs`
+- [x] Move all handlers
+- [x] Change extensions to use `PushService`
+- [x] `PushClient` injected via `App`
 
 ### 7.3 oauth/api.rs
 
 **From:** `src/api/auth.rs`
 **Changes:** Use `OAuthService` trait
 
-- [ ] Create `src/oauth/api.rs`
-- [ ] Move all handlers
-- [ ] Change extensions to use `OAuthService`
+- [x] Create `src/oauth/api.rs`
+- [x] Move all handlers
+- [x] Change extensions to use `OAuthService`
 
 ### 7.4 auth/api.rs
 
 **Purpose:** Admin auth handlers
 **From:** New or future split from admin handlers
 
-- [ ] Create `src/auth/api.rs`
-- [ ] Define admin auth handlers
+- [x] Create `src/auth/api.rs`
+- [x] Define admin auth handlers
 
 **Phase 7 Verification:**
-- [ ] `cargo check` passes
-- [ ] API handlers have no direct infra imports
+- [x] `cargo check` passes
+- [x] API handlers have no direct infra imports
 
 ---
 
@@ -489,15 +489,15 @@ src/
 **From:** `src/api.rs`
 **Changes:** Import from feature modules, use `App`
 
-- [ ] Rename `src/api.rs` to `src/router.rs`
-- [ ] Update imports to use feature `api.rs` modules
-- [ ] Change `AppState` + `AppServices` to single `App`
-- [ ] Update route registrations
-- [ ] Add OpenAPI documentation
+- [x] Create `src/router_v2.rs`
+- [x] Update imports to use feature `api.rs` modules
+- [x] Change `AppState` + `AppServices` to single `App`
+- [x] Update route registrations
+- [x] Add OpenAPI documentation
 
 **Phase 8 Verification:**
-- [ ] `cargo check` passes
-- [ ] All routes work
+- [x] `cargo check` passes
+- [x] All routes work
 
 ---
 
@@ -507,14 +507,14 @@ src/
 
 **Changes:** Use new `AppBuilder` pattern
 
-- [ ] Update module declarations
-- [ ] Replace `create_state` + `AppServices::builder` with `AppBuilder`
-- [ ] Remove old module imports
-- [ ] Verify startup
+- [x] Update module declarations
+- [x] Replace `create_state` + `AppServices::builder` with `AppBuilder`
+- [x] Remove old module imports
+- [x] Verify startup
 
 **Phase 9 Verification:**
-- [ ] `cargo check` passes
-- [ ] Application starts successfully
+- [x] `cargo check` passes
+- [x] Application starts successfully
 
 ---
 
@@ -593,15 +593,15 @@ All infra modules share one `SqliteDb` wrapper around `SqlitePool`.
 
 | Phase | Status |
 |-------|--------|
-| Phase 1: Scaffolding | [ ] |
-| Phase 2: Domain | [ ] |
-| Phase 3: Shared Infra | [ ] |
-| Phase 4: Infrastructure | [ ] |
-| Phase 5: Application Services | [ ] |
-| Phase 6: App Composition | [ ] |
-| Phase 7: API Handlers | [ ] |
-| Phase 8: Router | [ ] |
-| Phase 9: Main.rs | [ ] |
+| Phase 1: Scaffolding | [x] |
+| Phase 2: Domain | [x] |
+| Phase 3: Shared Infra | [x] |
+| Phase 4: Infrastructure | [x] |
+| Phase 5: Application Services | [x] |
+| Phase 6: App Composition | [x] |
+| Phase 7: API Handlers | [x] |
+| Phase 8: Router | [x] |
+| Phase 9: Main.rs | [x] |
 | Phase 10: Cleanup | [ ] |
 
 ---

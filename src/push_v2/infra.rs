@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::error::AppResult;
-use crate::push_v2::domain::{PushSubscription, PushSubscriptionRepository};
+use crate::push::repository::PushSubscription;
+use crate::push_v2::domain::PushSubscriptionRepository;
 use crate::shared_infra_v2::sqlite_db::SqliteDb;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -59,7 +60,7 @@ impl PushSubscriptionRepository for SqlitePushSubscriptionRepository {
 
     async fn get_all_subscriptions(&self) -> AppResult<Vec<PushSubscription>> {
         let results = sqlx::query_as::<_, PushSubscriptionRow>(
-            "SELECT id, endpoint, p256dh, auth, user_id, created_at FROM push_subscriptions",
+            "SELECT endpoint, p256dh, auth, user_id FROM push_subscriptions",
         )
         .fetch_all(self.db.pool())
         .await?;

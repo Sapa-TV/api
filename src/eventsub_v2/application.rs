@@ -98,3 +98,42 @@ impl EventSubManager {
         self.start().await
     }
 }
+
+pub struct TwitchStreamLifecycleAdapter;
+
+#[async_trait::async_trait]
+impl StreamLifecycle for TwitchStreamLifecycleAdapter {
+    async fn on_started(&self, provider: &str, started_at: DateTime<Utc>) -> AppResult<()> {
+        tracing::info!("[{}] Stream started at {}", provider, started_at);
+        Ok(())
+    }
+
+    async fn on_ended(&self, provider: &str, ended_at: DateTime<Utc>) -> AppResult<()> {
+        tracing::info!("[{}] Stream ended at {}", provider, ended_at);
+        Ok(())
+    }
+}
+
+pub struct TwitchChatHandlerAdapter;
+
+#[async_trait::async_trait]
+impl ChatHandler for TwitchChatHandlerAdapter {
+    async fn on_message(
+        &self,
+        provider: &str,
+        user_id: &str,
+        username: &str,
+        message: &str,
+        timestamp: DateTime<Utc>,
+    ) -> AppResult<()> {
+        tracing::info!(
+            "[{}] Chat message from {} ({}): {} at {}",
+            provider,
+            username,
+            user_id,
+            message,
+            timestamp
+        );
+        Ok(())
+    }
+}

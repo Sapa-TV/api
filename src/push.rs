@@ -3,7 +3,7 @@ use web_push_native::{
     Auth, WebPushBuilder, jwt_simple::algorithms::ES256KeyPair, p256::PublicKey,
 };
 
-mod repository;
+pub mod repository;
 
 pub use repository::PushSubscription;
 pub use repository::PushSubscriptionRepository;

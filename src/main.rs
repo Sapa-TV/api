@@ -20,8 +20,12 @@ mod state_v2;
 mod supporters_v2;
 mod push_v2;
 mod token_manager_v2;
+mod router_v2;
 
-use api::router;
+use router_v2::router;
+use app_v2::app::{App, AppBuilder};
+use app_v2::service_adapters::{SqliteSupporterService, SqlitePushService, TwitchOAuthService};
+use app_v2::ports::{SupportersService, PushService, OAuthService};
 use app_services::AppServices;
 use app_state::create_state;
 use dotenvy::dotenv;
@@ -32,6 +36,8 @@ use std::sync::Arc;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use crate::infrastructure::{InitDbData, create_db};
+use crate::token_manager_v2::infra::sqlite::SqliteTokenRepository;
+use crate::shared_infra_v2::sqlite_db::SqliteDb as NewSqliteDb;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
@@ -56,7 +62,22 @@ async fn main() -> AppResult<()> {
     let state = create_state(db.as_ref()).await?;
     let services = AppServices::builder().db(db.clone()).build().await?;
 
-    let app = router(state, services.clone());
+    let new_db = Arc::new(NewSqliteDb::new(db.pool().clone()));
+    let supporters_repo = Arc::new(crate::supporters_v2::infra::SqliteSupporterRepository::new(new_db.clone()));
+    let push_repo = Arc::new(crate::push_v2::infra::SqlitePushSubscriptionRepository::new(new_db.clone()));
+    let token_repo = Arc::new(SqliteTokenRepository::new(new_db.clone()));
+    let token_manager = Arc::new(crate::token_manager_v2::application::TokenManagerS::new(token_repo));
+
+    let app: App = App::builder()
+        .supporters(Arc::new(SqliteSupporterService::new(supporters_repo)))
+        .push(Arc::new(SqlitePushService::new(push_repo)))
+        .oauth(Arc::new(TwitchOAuthService::new(Arc::new(crate::eventsub_v2::infra::client::TwitchApiClient::new(
+            Arc::new(twitch_api::HelixClient::new()),
+            token_manager,
+        )))))
+        .build();
+
+    let app_router = router(Arc::new(app));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::info!("Backend API: http://localhost:3000");
@@ -67,7 +88,7 @@ async fn main() -> AppResult<()> {
 
     let server = async {
         let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app_router).await.unwrap();
     };
 
     tokio::select! {
@@ -89,7 +110,7 @@ mod tests {
     fn generate_openapi() {
         let path = Path::new("generated/openapi.json");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let json = super::api::ApiDoc::openapi().to_pretty_json().unwrap();
+        let json = super::router_v2::ApiDoc::openapi().to_pretty_json().unwrap();
         fs::write(path, json).unwrap();
     }
 }
