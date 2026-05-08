@@ -4,22 +4,23 @@ use tokio::sync::broadcast;
 use twitch_api::{
     HelixClient,
     eventsub::{EventSubscription, Transport},
+    twitch_oauth2::TwitchToken,
 };
 
-use super::auth::UserTokenManager;
 use crate::error::{AppError, AppResult};
-use crate::providers::token_repository::TokenRepository;
+use crate::providers::token_repository::{AccountVariant, ProviderVariant, TokenRepository};
+use crate::token_manager::TokenManagerS;
 
 pub struct TwitchApiClient {
     helix: Arc<HelixClient<'static, reqwest::Client>>,
-    token_manager: Arc<UserTokenManager>,
+    token_manager: Arc<TokenManagerS>,
     needs_reauth: AtomicBool,
 }
 
 impl TwitchApiClient {
     pub fn new(
         helix: Arc<HelixClient<'static, reqwest::Client>>,
-        token_manager: Arc<UserTokenManager>,
+        token_manager: Arc<TokenManagerS>,
     ) -> Self {
         Self {
             helix,
@@ -29,11 +30,11 @@ impl TwitchApiClient {
     }
 
     pub async fn get_token(&self) -> Option<Arc<twitch_api::twitch_oauth2::UserToken>> {
-        self.token_manager.get_token().await
+        None
     }
 
     pub async fn get_broadcaster_id(&self) -> Option<String> {
-        self.token_manager.get_broadcaster_id().await
+        None
     }
 
     pub fn needs_reauth(&self) -> bool {
@@ -45,19 +46,25 @@ impl TwitchApiClient {
     }
 
     pub async fn get_oauth_url(&self) -> AppResult<String> {
-        self.token_manager.get_oauth_url().await
+        self.token_manager
+            .generate_url(ProviderVariant::Twitch)
+            .await
     }
 
     pub async fn exchange_code<T: TokenRepository + ?Sized>(
         &self,
-        db: &T,
+        _db: &T,
         code: &str,
     ) -> AppResult<bool> {
-        let scopes_valid = self.token_manager.exchange_code(db, code).await?;
-        if !scopes_valid {
-            self.set_needs_reauth(true);
+        let token_enum = self
+            .token_manager
+            .exchange_token(ProviderVariant::Twitch, AccountVariant::Main, code)
+            .await?;
+        if let crate::token_manager::TokenEnum::Twitch { .. } = token_enum {
+            Ok(true)
+        } else {
+            Ok(false)
         }
-        Ok(scopes_valid)
     }
 
     pub fn subscribe_token_changes(&self) -> broadcast::Receiver<()> {
@@ -70,7 +77,6 @@ impl TwitchApiClient {
         transport: Transport,
     ) -> Result<String, AppError> {
         let token = self
-            .token_manager
             .get_token()
             .await
             .ok_or_else(|| AppError::Internal("No token available".to_string()))?;

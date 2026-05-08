@@ -3,9 +3,8 @@ use chrono::{DateTime, Utc};
 use crate::{
     error::AppResult,
     infrastructure::db_sqlite::{SqliteDb, models::TokenRecordRow},
-    providers::token_repository::{
-        AccountVariant, ProviderVariant, TokenEnum, TokenRecord, TokenRepository,
-    },
+    providers::token_repository::{AccountVariant, ProviderVariant, TokenRecord, TokenRepository},
+    token_manager::TokenEnum,
 };
 
 #[async_trait::async_trait]
@@ -16,27 +15,26 @@ impl TokenRepository for SqliteDb {
         account_variant: AccountVariant,
     ) -> AppResult<Option<TokenEnum>> {
         let result = sqlx::query_as::<_, TokenRecordRow>(
-            "SELECT raw_data FROM provider_tokens WHERE account_variant = ? AND provider = ?",
+            "SELECT account_variant, provider, raw_data FROM provider_tokens WHERE account_variant = ? AND provider = ?",
         )
         .bind(account_variant)
         .bind(provider)
         .fetch_optional(&self.pool)
         .await?;
 
-        let result: Option<TokenEnum> = match result {
+        match result {
             Some(token_row) => {
-                let token_record: TokenRecord = token_row.try_into()?;
-                Some(token_record.token)
+                let record: TokenRecord = token_row.try_into()?;
+                Ok(Some(record.token))
             }
-            None => None,
-        };
-        Ok(result)
+            None => Ok(None),
+        }
     }
 
     async fn save_provider_token(
         &self,
-        account_variant: AccountVariant,
         provider: ProviderVariant,
+        account_variant: AccountVariant,
         provider_id: &str,
         expires_at: DateTime<Utc>,
         token: TokenEnum,

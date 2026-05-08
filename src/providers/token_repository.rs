@@ -3,14 +3,14 @@ use sqlx::prelude::Type;
 
 use crate::{error::AppResult, token_manager::TokenEnum};
 
-#[derive(Type, Hash, PartialEq, Eq)]
+#[derive(Type, Hash, PartialEq, Eq, Clone)]
 #[sqlx(type_name = "text")]
 #[sqlx(rename_all = "lowercase")]
 pub enum ProviderVariant {
     Twitch,
 }
 
-#[derive(Type, Hash, PartialEq, Eq)]
+#[derive(Type, Hash, PartialEq, Eq, Clone)]
 #[sqlx(type_name = "text")]
 #[sqlx(rename_all = "lowercase")]
 pub enum AccountVariant {
@@ -18,6 +18,7 @@ pub enum AccountVariant {
     Bot,
 }
 
+#[derive(Clone)]
 pub struct TokenRecord {
     pub account_variant: AccountVariant,
     pub provider: ProviderVariant,

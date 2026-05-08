@@ -1,11 +1,12 @@
 use crate::{
     error::AppError,
-    providers::token_repository::{ProviderVariant, TokenRecord},
+    providers::token_repository::{AccountVariant, ProviderVariant},
     push::PushSubscription,
 };
+use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-#[derive(FromRow)]
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct PushSubscriptionRow {
     pub endpoint: String,
     pub p256dh: String,
@@ -24,21 +25,40 @@ impl From<PushSubscriptionRow> for PushSubscription {
     }
 }
 
-#[derive(FromRow)]
+#[derive(Debug, Clone, FromRow)]
 pub struct TokenRecordRow {
     pub account_variant: String,
-    pub provider: ProviderVariant,
-    pub token: serde_json::Value,
+    pub provider: String,
+    pub raw_data: String,
 }
 
-impl TryFrom<TokenRecordRow> for TokenRecord {
+impl TryFrom<TokenRecordRow> for crate::providers::token_repository::TokenRecord {
     type Error = AppError;
     fn try_from(row: TokenRecordRow) -> Result<Self, Self::Error> {
-        let token = serde_json::from_value(row.token)?;
+        let account_variant = match row.account_variant.as_str() {
+            "main" => AccountVariant::Main,
+            "bot" => AccountVariant::Bot,
+            _ => {
+                return Err(AppError::Internal(format!(
+                    "Unknown account_variant: {}",
+                    row.account_variant
+                )));
+            }
+        };
+        let provider = match row.provider.as_str() {
+            "twitch" => ProviderVariant::Twitch,
+            _ => {
+                return Err(AppError::Internal(format!(
+                    "Unknown provider: {}",
+                    row.provider
+                )));
+            }
+        };
+        let token = serde_json::from_str(&row.raw_data)?;
 
         Ok(Self {
-            account_variant: row.account_variant,
-            provider: row.provider,
+            account_variant,
+            provider,
             token,
         })
     }
