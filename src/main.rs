@@ -113,9 +113,10 @@ async fn main() -> AppResult<()> {
         .oauth(Arc::new(TwitchOAuthService::new(Arc::new(
             crate::eventsub::infra::client::TwitchApiClient::new(
                 Arc::new(twitch_api::HelixClient::new()),
-                token_manager,
+                token_manager.clone(),
             ),
         ))))
+        .token_manager(token_manager)
         .build();
 
     let app_router = router(Arc::new(app));

@@ -1,4 +1,7 @@
 pub use crate::oauth::domain::OAuthService;
+pub use crate::token_manager::domain::repository::TokenRepository;
+pub use crate::token_manager::domain::types::{AccountVariant, ProviderVariant};
+pub use crate::token_manager::domain::enums::TokenEnum;
 
 use crate::push::domain::PushSubscription;
 

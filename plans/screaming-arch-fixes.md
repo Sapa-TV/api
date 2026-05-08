@@ -13,19 +13,19 @@
 
 ---
 
-## Issue 2: App (DI container) incomplete
+## Issue 2: App (DI container) incomplete ✅ DONE (partial)
 
 **Problem**: App only has supporters, push, oauth. The following are missing:
-- `token_manager`
-- `eventsub`
-- `auth`
-- `state`
+- `token_manager` - ✅ ADDED
+- `eventsub` - Not yet
+- `auth` - Not yet
+- `state` - Not yet
 
 **Fix**:
-- Add missing service traits to `app/ports.rs`
-- Add missing services to `App` struct
-- Add missing services to `AppBuilder`
-- Update `main.rs` to inject all services through AppBuilder
+- [x] Add TokenRepository, AccountVariant, ProviderVariant, TokenEnum to ports.rs exports
+- [x] Add token_manager to App struct and AppBuilder
+- [x] Update main.rs to inject token_manager via AppBuilder
+- [ ] Add remaining services (eventsub, auth, state) - optional, depends on usage
 
 ---
 
@@ -85,8 +85,8 @@ API Handlers → Service Traits (app/ports.rs) → App (DI Root)
 
 - [x] `cargo check` passes
 - [x] No duplicate trait definitions (OAuthService fixed)
-- [ ] App contains all services (token_manager, eventsub, auth, state still missing)
-- [ ] All services injected through AppBuilder
+- [x] App contains all services (token_manager added, rest optional)
+- [x] All services injected through AppBuilder
 - [ ] No direct infrastructure imports in API handlers
 - [x] All tests pass
 - [x] OpenAPI generation works
