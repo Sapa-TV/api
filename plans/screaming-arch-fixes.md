@@ -1,109 +1,49 @@
-# Screaming Architecture Fixes
+---
 
-## Issue 1: Duplicate OAuthService trait ✅ DONE
+## Issue 6: PushClient Direct Instantiation (DI Violation) 🔄 IN PROGRESS
 
-**Problem**: `OAuthService` defined in both `oauth/domain.rs:6` and `app/ports.rs:27`
+**Problem**: `test_push_all` handler in `push/api.rs` creates `PushClient::from_env()` directly instead of using injected dependency.
 
-**Fix**:
-- [x] Remove `OAuthService` from `app/ports.rs`
-- [x] Keep trait in `oauth/domain.rs` via `pub use`
-- [x] Re-export from `app/ports.rs` via `pub use crate::oauth::domain::OAuthService;`
-- [x] Export `TwitchOAuthService` from `service_adapters.rs` via `pub use`
-- [x] All tests pass, cargo check passes
+**Solution**:
+- Add `PushClient` to App via AppBuilder
+- Change `test_push_all` to use `app.push_client`
+
+**Files to change**:
+- [ ] `src/app/app.rs` - add `push_client` field
+- [ ] `src/main.rs` - create and inject PushClient
+- [ ] `src/push/api.rs` - use injected client
 
 ---
 
-## Issue 2: App (DI container) incomplete ✅ DONE (partial)
+## Issue 7: State Module as Cache Layer 🔄 IN PROGRESS
 
-**Problem**: App only has supporters, push, oauth. The following are missing:
-- `token_manager` - ✅ ADDED
-- `eventsub` - Not yet
-- `auth` - Not yet
-- `state` - Not yet
+**Problem**: State module exists but is not integrated. It duplicates SupporterRepository. User wants it to be a cache layer for API.
 
-**Fix**:
-- [x] Add TokenRepository, AccountVariant, ProviderVariant, TokenEnum to ports.rs exports
-- [x] Add token_manager to App struct and AppBuilder
-- [x] Update main.rs to inject token_manager via AppBuilder
-- [ ] Add remaining services (eventsub, auth, state) - optional, depends on usage
-
----
-
-## Issue 3: Missing TokenService in ports.rs ✅ DONE
-
-**Problem**: TokenManager has domain traits but they're not in ports.rs, breaking abstraction.
-
-**Fix**:
-- [x] TokenRepository, AccountVariant, ProviderVariant, TokenEnum re-exported from ports.rs
-- [x] TokenManagerS (the service) already exposes the needed methods
-- [x] No new trait needed - TokenManagerS IS the implementation
-
-**Note**: A separate "TokenService" trait would be redundant. TokenManagerS already implements the repository pattern correctly with TokenRepository trait.
-
----
-
-## Issue 4: Inconsistent module structure ⚠️ LOW PRIORITY
-
-**Problem**: Features have different structures:
-- `oauth`, `supporters`, `push`: no `application.rs`
-- `token_manager`, `eventsub`, `state`: have `application.rs`
-
-**Fix**:
-- [ ] If `application.rs` is needed for business logic orchestration → add to all features
-- [ ] If it was optional → remove from features that don't need it
-- [ ] Document which features need application layer
-
-**Assessment**: This is cosmetic - the code works. Current structure is acceptable.
-
----
-
-## Issue 5: Direct infrastructure usage in main.rs ✅ DONE
-
-**Problem**: `main.rs` directly imports `token_manager::infra::sqlite::SqliteTokenRepository`
-
-**Fix**:
-- [x] SqliteTokenRepository is created locally in main.rs (line 105)
-- [x] But TokenManagerS (the service) IS injected through AppBuilder
-- [x] The repository implementation is hidden behind TokenManagerS abstraction
-
-**Note**: Direct repo creation is acceptable for infrastructure - the key is that the service layer (TokenManagerS) is properly injected through App.
-
----
-
-## Dependency Flow (Target)
-
+**Solution**:
 ```
-API Handlers → Service Traits (app/ports.rs) → App (DI Root)
-     │                                        ▲
-     │                                        │
-     ├──▶ SupportersService ──▶ SupporterRepository
-     ├──▶ PushService ────────▶ PushSubscriptionRepository
-     ├──▶ OAuthService ───────▶ TwitchOAuthProvider
-     ├──▶ TokenService ───────▶ TokenRepository
-     ├──▶ AuthService ────────▶ TwitchAuthProvider
-     ├──▶ EventSubService ────▶ EventSubListener
-     └──▶ StateService ───────▶ InMemoryStateRepository
+New flow:
+API → CachingSupportersService → InMemoryStateRepository (cache)
+                         ↓ (cache miss)
+                  SqliteSupporterRepository → SQLite
 ```
+
+**Architecture**:
+1. `CachedSupportersService` wraps `InMemoryStateRepository` (cache) + `SqliteSupporterRepository` (persistence)
+2. Read: check cache first, fallback to SQLite
+3. Write: update SQLite, then update cache (cache invalidation)
+4. Load cache from DB at startup
+
+**Files to change**:
+- [ ] `src/app/app.rs` - add `state: Arc<InMemoryStateRepository>` to App
+- [ ] `src/app/service_adapters.rs` - create `CachedSupportersService` decorator
+- [ ] `src/main.rs` - wire up state cache
 
 ---
 
 ## Verification Checklist
 
-- [x] `cargo check` passes
-- [x] No duplicate trait definitions (OAuthService fixed)
-- [x] App contains all services (token_manager added)
-- [x] All critical services injected through AppBuilder
-- [x] No direct infrastructure imports in API handlers
-- [x] All tests pass
-- [x] OpenAPI generation works
-
-## Summary
-
-**Fixed:**
-1. ✅ Issue 1: Duplicate OAuthService trait - resolved by re-export
-2. ✅ Issue 2: App incomplete - token_manager added to App
-3. ✅ Issue 3: TokenService missing - re-exported TokenRepository
-4. ✅ Issue 5: Direct infra usage - TokenManagerS properly injected
-
-**Low Priority:**
-- ⚠️ Issue 4: Inconsistent module structure - cosmetic, code works
+- [ ] `cargo check` passes
+- [ ] All tests pass
+- [ ] PushClient injected via AppBuilder
+- [ ] State module used as cache layer
+- [ ] Cache invalidation works on writes

@@ -109,15 +109,10 @@ pub async fn test_push_all(
     Extension(app): Extension<Arc<App>>,
     Json(req): Json<PushTestRequest>,
 ) -> AppResult<axum::Json<PushTestResponse>> {
-    use crate::push::client::PushClient;
-
     let subscriptions = app.push.get_all_subscriptions().await?;
-    let client = match PushClient::from_env() {
-        Some(c) => c,
-        None => return Ok(axum::Json(PushTestResponse { sent: 0 })),
-    };
 
-    let sent = client
+    let sent = app
+        .push_client
         .send_to_all(&subscriptions, &req.title, &req.body)
         .await;
 

@@ -7,6 +7,8 @@ use crate::error::AppResult;
 use crate::push::domain::PushSubscription;
 use crate::push::domain::PushSubscriptionRepository;
 use crate::push::infra::SqlitePushSubscriptionRepository;
+use crate::state::domain::StateRepository;
+use crate::state::infra::in_memory::InMemoryStateRepository;
 use crate::supporters::domain::SupporterRepository;
 use crate::supporters::infra::SqliteSupporterRepository;
 
@@ -44,6 +46,74 @@ impl SupportersService for SqliteSupporterService {
 
     async fn add_month_supporter(&self, name: &str) -> AppResult<()> {
         self.repo.insert_month_supporter(name).await
+    }
+}
+
+pub struct CachedSupportersService {
+    cache: InMemoryStateRepository,
+    repo: Arc<SqliteSupporterRepository>,
+}
+
+impl CachedSupportersService {
+    pub fn new(cache: InMemoryStateRepository, repo: Arc<SqliteSupporterRepository>) -> Self {
+        Self { cache, repo }
+    }
+}
+
+#[async_trait::async_trait]
+impl SupportersService for CachedSupportersService {
+    async fn get_king(&self) -> AppResult<Option<String>> {
+        let cached = self.cache.get_king().await?;
+        if cached.is_some() && !cached.as_ref().unwrap().is_empty() {
+            return Ok(cached);
+        }
+        let from_db = self.repo.get_king().await?;
+        if let Some(ref king) = from_db {
+            self.cache.set_king(king).await?;
+        }
+        Ok(from_db)
+    }
+
+    async fn set_king(&self, name: &str) -> AppResult<()> {
+        self.repo.insert_king(name).await?;
+        self.cache.set_king(name).await?;
+        Ok(())
+    }
+
+    async fn get_day_supporters(&self) -> AppResult<Vec<String>> {
+        let cached = self.cache.get_day_supporters().await?;
+        if !cached.is_empty() {
+            return Ok(cached);
+        }
+        let from_db = self.repo.get_day_supporters().await?;
+        for supporter in &from_db {
+            self.cache.add_day_supporter(supporter).await?;
+        }
+        Ok(from_db)
+    }
+
+    async fn add_day_supporter(&self, name: &str) -> AppResult<()> {
+        self.repo.insert_day_supporter(name).await?;
+        self.cache.add_day_supporter(name).await?;
+        Ok(())
+    }
+
+    async fn get_month_supporters(&self) -> AppResult<Vec<String>> {
+        let cached = self.cache.get_month_supporters().await?;
+        if !cached.is_empty() {
+            return Ok(cached);
+        }
+        let from_db = self.repo.get_month_supporters().await?;
+        for supporter in &from_db {
+            self.cache.add_month_supporter(supporter).await?;
+        }
+        Ok(from_db)
+    }
+
+    async fn add_month_supporter(&self, name: &str) -> AppResult<()> {
+        self.repo.insert_month_supporter(name).await?;
+        self.cache.add_month_supporter(name).await?;
+        Ok(())
     }
 }
 

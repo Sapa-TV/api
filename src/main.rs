@@ -12,8 +12,11 @@ mod router;
 mod shared_infra;
 mod state;
 
+use crate::state::infra::in_memory::InMemoryStateRepository;
 use app::app::{App, AppBuilder};
-use app::service_adapters::{SqlitePushService, SqliteSupporterService, TwitchOAuthService};
+use app::service_adapters::{
+    CachedSupportersService, SqlitePushService, SqliteSupporterService, TwitchOAuthService,
+};
 use dotenvy::dotenv;
 use error::AppResult;
 use router::router;
@@ -107,8 +110,25 @@ async fn main() -> AppResult<()> {
         token_repo,
     ));
 
+    let state_cache = InMemoryStateRepository::new();
+    let cached_supporters = Arc::new(CachedSupportersService::new(
+        state_cache,
+        supporters_repo.clone(),
+    ));
+
+    let push_client = match crate::push::client::PushClient::from_env() {
+        Some(c) => Arc::new(c),
+        None => {
+            tracing::warn!("PushClient not initialized - VAPID keys not configured");
+            Arc::new(
+                crate::push::client::PushClient::new("placeholder", "mailto:placeholder")
+                    .expect("hardcoded"),
+            )
+        }
+    };
+
     let app: App = App::builder()
-        .supporters(Arc::new(SqliteSupporterService::new(supporters_repo)))
+        .supporters(cached_supporters)
         .push(Arc::new(SqlitePushService::new(push_repo)))
         .oauth(Arc::new(TwitchOAuthService::new(Arc::new(
             crate::eventsub::infra::client::TwitchApiClient::new(
@@ -117,6 +137,7 @@ async fn main() -> AppResult<()> {
             ),
         ))))
         .token_manager(token_manager)
+        .push_client(push_client)
         .build();
 
     let app_router = router(Arc::new(app));
