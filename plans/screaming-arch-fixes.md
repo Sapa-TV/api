@@ -1,14 +1,15 @@
 # Screaming Architecture Fixes
 
-## Issue 1: Duplicate OAuthService trait
+## Issue 1: Duplicate OAuthService trait ✅ DONE
 
 **Problem**: `OAuthService` defined in both `oauth/domain.rs:6` and `app/ports.rs:27`
 
 **Fix**:
-- Remove `OAuthService` from `app/ports.rs`
-- Keep trait in `oauth/domain.rs`
-- Update `service_adapters.rs` to import from `oauth::domain`
-- Ensure `oauth/api.rs` uses `dyn OAuthService` from domain
+- [x] Remove `OAuthService` from `app/ports.rs`
+- [x] Keep trait in `oauth/domain.rs` via `pub use`
+- [x] Re-export from `app/ports.rs` via `pub use crate::oauth::domain::OAuthService;`
+- [x] Export `TwitchOAuthService` from `service_adapters.rs` via `pub use`
+- [x] All tests pass, cargo check passes
 
 ---
 
@@ -82,10 +83,10 @@ API Handlers → Service Traits (app/ports.rs) → App (DI Root)
 
 ## Verification Checklist
 
-- [ ] `cargo check` passes
-- [ ] No duplicate trait definitions
-- [ ] App contains all services
+- [x] `cargo check` passes
+- [x] No duplicate trait definitions (OAuthService fixed)
+- [ ] App contains all services (token_manager, eventsub, auth, state still missing)
 - [ ] All services injected through AppBuilder
 - [ ] No direct infrastructure imports in API handlers
-- [ ] All tests pass
-- [ ] OpenAPI generation works
+- [x] All tests pass
+- [x] OpenAPI generation works

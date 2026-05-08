@@ -1,3 +1,5 @@
+pub use crate::oauth::domain::OAuthService;
+
 use crate::push::domain::PushSubscription;
 
 #[async_trait::async_trait]
@@ -21,10 +23,4 @@ pub trait PushService: Send + Sync {
     ) -> crate::error::AppResult<()>;
     async fn unsubscribe(&self, endpoint: &str) -> crate::error::AppResult<()>;
     async fn get_all_subscriptions(&self) -> crate::error::AppResult<Vec<PushSubscription>>;
-}
-
-#[async_trait::async_trait]
-pub trait OAuthService: Send + Sync {
-    async fn get_auth_url(&self) -> crate::error::AppResult<String>;
-    async fn handle_callback(&self, code: &str) -> crate::error::AppResult<bool>;
 }
