@@ -110,7 +110,7 @@ async fn main() -> AppResult<()> {
         token_repo,
     ));
 
-    let state_cache = InMemoryStateRepository::new();
+    let state_cache = Arc::new(InMemoryStateRepository::new());
     let cached_supporters = Arc::new(CachedSupportersService::new(
         state_cache,
         supporters_repo.clone(),

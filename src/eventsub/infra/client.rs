@@ -3,14 +3,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use twitch_api::{HelixClient, eventsub::EventSubscription};
 
 use crate::error::{AppError, AppResult};
+use crate::eventsub::domain::TwitchApiClientTrait;
 use crate::token_manager::application::TokenManagerS;
 use crate::token_manager::domain::types::{AccountVariant, ProviderVariant};
-
-#[async_trait::async_trait]
-pub trait TwitchApiClientTrait: Send + Sync {
-    async fn get_oauth_url(&self) -> AppResult<String>;
-    async fn exchange_code(&self, code: &str) -> AppResult<bool>;
-}
 
 pub struct TwitchApiClient {
     helix: Arc<HelixClient<'static, reqwest::Client>>,

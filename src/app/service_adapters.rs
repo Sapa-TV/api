@@ -6,18 +6,16 @@ use crate::app::ports::{OAuthService, PushService, SupportersService};
 use crate::error::AppResult;
 use crate::push::domain::PushSubscription;
 use crate::push::domain::PushSubscriptionRepository;
-use crate::push::infra::SqlitePushSubscriptionRepository;
 use crate::state::domain::StateRepository;
 use crate::state::infra::in_memory::InMemoryStateRepository;
 use crate::supporters::domain::SupporterRepository;
-use crate::supporters::infra::SqliteSupporterRepository;
 
 pub struct SqliteSupporterService {
-    repo: Arc<SqliteSupporterRepository>,
+    repo: Arc<dyn SupporterRepository>,
 }
 
 impl SqliteSupporterService {
-    pub fn new(repo: Arc<SqliteSupporterRepository>) -> Self {
+    pub fn new(repo: Arc<dyn SupporterRepository>) -> Self {
         Self { repo }
     }
 }
@@ -50,12 +48,12 @@ impl SupportersService for SqliteSupporterService {
 }
 
 pub struct CachedSupportersService {
-    cache: InMemoryStateRepository,
-    repo: Arc<SqliteSupporterRepository>,
+    cache: Arc<InMemoryStateRepository>,
+    repo: Arc<dyn SupporterRepository>,
 }
 
 impl CachedSupportersService {
-    pub fn new(cache: InMemoryStateRepository, repo: Arc<SqliteSupporterRepository>) -> Self {
+    pub fn new(cache: Arc<InMemoryStateRepository>, repo: Arc<dyn SupporterRepository>) -> Self {
         Self { cache, repo }
     }
 }
@@ -118,11 +116,11 @@ impl SupportersService for CachedSupportersService {
 }
 
 pub struct SqlitePushService {
-    repo: Arc<SqlitePushSubscriptionRepository>,
+    repo: Arc<dyn PushSubscriptionRepository>,
 }
 
 impl SqlitePushService {
-    pub fn new(repo: Arc<SqlitePushSubscriptionRepository>) -> Self {
+    pub fn new(repo: Arc<dyn PushSubscriptionRepository>) -> Self {
         Self { repo }
     }
 }

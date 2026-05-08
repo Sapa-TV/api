@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::error::AppResult;
-use crate::eventsub::infra::client::TwitchApiClientTrait;
+use crate::eventsub::domain::TwitchApiClientTrait;
 use crate::oauth::domain::OAuthService;
 
 pub struct TwitchOAuthService {
