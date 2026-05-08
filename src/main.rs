@@ -10,6 +10,17 @@ mod push;
 mod supporters;
 mod token_manager;
 
+// New screaming architecture modules (v2 - parallel structure)
+mod shared_infra_v2;
+mod app_v2;
+mod eventsub_v2;
+mod oauth_v2;
+mod auth_v2;
+mod state_v2;
+mod supporters_v2;
+mod push_v2;
+mod token_manager_v2;
+
 use api::router;
 use app_services::AppServices;
 use app_state::create_state;
