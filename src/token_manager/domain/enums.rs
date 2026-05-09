@@ -43,7 +43,6 @@ impl<'de> serde::Deserialize<'de> for TokenEnum {
         D: serde::Deserializer<'de>,
     {
         use serde::Deserialize;
-        use serde::de::Error;
         #[derive(Deserialize)]
         struct TwitchTokenRaw {
             #[serde(rename = "type")]
