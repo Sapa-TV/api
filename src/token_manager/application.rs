@@ -9,14 +9,14 @@ use crate::token_manager::domain::provider::TokenProvider;
 use crate::token_manager::domain::repository::TokenRepository;
 use crate::token_manager::domain::types::{AccountVariant, ProviderVariant, TokenRecord};
 
-pub struct TokenManagerS {
+pub struct TokenManager {
     repo: Arc<dyn TokenRepository + Send + Sync>,
     tokens: Arc<RwLock<HashMap<(ProviderVariant, AccountVariant), TokenRecord>>>,
     providers: Arc<RwLock<HashMap<ProviderVariant, Arc<dyn TokenProvider>>>>,
     token_change_tx: broadcast::Sender<()>,
 }
 
-impl TokenManagerS {
+impl TokenManager {
     pub fn new(repo: Arc<dyn TokenRepository + Send + Sync>) -> Self {
         let (token_change_tx, _) = broadcast::channel(1);
         Self {

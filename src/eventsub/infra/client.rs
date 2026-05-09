@@ -4,19 +4,19 @@ use twitch_api::{HelixClient, eventsub::EventSubscription};
 
 use crate::error::{AppError, AppResult};
 use crate::oauth::domain::OAuthService;
-use crate::token_manager::application::TokenManagerS;
+use crate::token_manager::application::TokenManager;
 use crate::token_manager::domain::types::{AccountVariant, ProviderVariant};
 
 pub struct TwitchApiClient {
     helix: Arc<HelixClient<'static, reqwest::Client>>,
-    token_manager: Arc<TokenManagerS>,
+    token_manager: Arc<TokenManager>,
     needs_reauth: AtomicBool,
 }
 
 impl TwitchApiClient {
     pub fn new(
         helix: Arc<HelixClient<'static, reqwest::Client>>,
-        token_manager: Arc<TokenManagerS>,
+        token_manager: Arc<TokenManager>,
     ) -> Self {
         Self {
             helix,

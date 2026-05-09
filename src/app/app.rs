@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use crate::app::ports::{OAuthService, PushService, SupportersService};
 use crate::push::infra::PushClient;
-use crate::token_manager::application::TokenManagerS;
+use crate::token_manager::application::TokenManager;
 
 pub struct App {
     pub supporters: Arc<dyn SupportersService>,
     pub push: Arc<dyn PushService>,
     pub oauth: Arc<dyn OAuthService>,
-    pub token_manager: Arc<TokenManagerS>,
+    pub token_manager: Arc<TokenManager>,
     pub push_client: Arc<PushClient>,
 }
 
@@ -22,7 +22,7 @@ pub struct AppBuilder {
     supporters: Option<Arc<dyn SupportersService>>,
     push: Option<Arc<dyn PushService>>,
     oauth: Option<Arc<dyn OAuthService>>,
-    token_manager: Option<Arc<TokenManagerS>>,
+    token_manager: Option<Arc<TokenManager>>,
     push_client: Option<Arc<PushClient>>,
 }
 
@@ -52,7 +52,7 @@ impl AppBuilder {
         self
     }
 
-    pub fn token_manager(mut self, t: Arc<TokenManagerS>) -> Self {
+    pub fn token_manager(mut self, t: Arc<TokenManager>) -> Self {
         self.token_manager = Some(t);
         self
     }

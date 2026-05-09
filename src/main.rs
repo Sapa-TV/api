@@ -52,7 +52,7 @@ async fn main() -> AppResult<()> {
         db.clone(),
     ));
     let token_repo = Arc::new(SqliteTokenRepository::new(db.clone()));
-    let token_manager = Arc::new(crate::token_manager::application::TokenManagerS::new(
+    let token_manager = Arc::new(crate::token_manager::application::TokenManager::new(
         token_repo,
     ));
 
