@@ -11,7 +11,6 @@ use crate::token_manager::domain::types::{AccountVariant, ProviderVariant};
 pub struct TwitchApiClient {
     helix: Arc<HelixClient<'static, reqwest::Client>>,
     token_manager: Arc<TokenManager>,
-    client_id: String,
     client_secret: String,
     needs_reauth: AtomicBool,
 }
@@ -20,13 +19,11 @@ impl TwitchApiClient {
     pub fn new(
         helix: Arc<HelixClient<'static, reqwest::Client>>,
         token_manager: Arc<TokenManager>,
-        client_id: String,
         client_secret: String,
     ) -> Self {
         Self {
             helix,
             token_manager,
-            client_id,
             client_secret,
             needs_reauth: AtomicBool::new(false),
         }

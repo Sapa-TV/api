@@ -94,13 +94,8 @@ impl EventSubManager {
             let _ = tx.send(());
         }
         if let Some(handle) = self.handle.write().await.take() {
-            let _ = handle.await;
+            handle.abort();
         }
-    }
-
-    pub async fn restart(&self) -> AppResult<()> {
-        tracing::info!("Restarting EventSub...");
-        self.start().await
     }
 }
 
