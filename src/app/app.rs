@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::app::ports::{OAuthService, PushService, SupportersService};
+use crate::eventsub::application::EventSubManager;
 use crate::push::infra::PushClient;
 use crate::token_manager::application::TokenManager;
 
@@ -10,6 +11,7 @@ pub struct App {
     pub oauth: Arc<dyn OAuthService>,
     pub token_manager: Arc<TokenManager>,
     pub push_client: Arc<PushClient>,
+    pub eventsub: Option<Arc<EventSubManager>>,
 }
 
 impl App {
@@ -24,6 +26,7 @@ pub struct AppBuilder {
     oauth: Option<Arc<dyn OAuthService>>,
     token_manager: Option<Arc<TokenManager>>,
     push_client: Option<Arc<PushClient>>,
+    eventsub: Option<Arc<EventSubManager>>,
 }
 
 impl AppBuilder {
@@ -34,6 +37,7 @@ impl AppBuilder {
             oauth: None,
             token_manager: None,
             push_client: None,
+            eventsub: None,
         }
     }
 
@@ -62,6 +66,11 @@ impl AppBuilder {
         self
     }
 
+    pub fn eventsub(mut self, e: Arc<EventSubManager>) -> Self {
+        self.eventsub = Some(e);
+        self
+    }
+
     pub fn build(self) -> App {
         App {
             supporters: self.supporters.expect("supporters required"),
@@ -69,6 +78,7 @@ impl AppBuilder {
             oauth: self.oauth.expect("oauth required"),
             token_manager: self.token_manager.expect("token_manager required"),
             push_client: self.push_client.expect("push_client required"),
+            eventsub: self.eventsub,
         }
     }
 }

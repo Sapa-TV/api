@@ -89,15 +89,28 @@ async fn main() -> AppResult<()> {
         twitch_provider.client_secret().to_string(),
     ));
 
+    let lifecycle = Arc::new(crate::eventsub::application::TwitchLifecycle::new(
+        Arc::new(crate::eventsub::application::TwitchStreamLifecycleAdapter),
+        Arc::new(crate::eventsub::application::TwitchChatHandlerAdapter),
+    ));
+    let eventsub_manager = Arc::new(crate::eventsub::application::EventSubManager::new(
+        twitch_api_client.clone(),
+        lifecycle,
+    ));
+    eventsub_manager.start().await?;
+
     let app: App = App::builder()
         .supporters(cached_supporters)
         .push(Arc::new(SqlitePushService::new(push_repo)))
         .oauth(twitch_api_client)
         .token_manager(token_manager)
         .push_client(push_client)
+        .eventsub(eventsub_manager.clone())
         .build();
 
-    let app_router = router(Arc::new(app));
+    let app = Arc::new(app);
+    let app_for_shutdown = app.clone();
+    let app_router = router(app.clone());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     tracing::info!("Backend API: http://localhost:3000");
@@ -115,6 +128,11 @@ async fn main() -> AppResult<()> {
         _ = server => {
             tracing::info!("Server stopped");
         }
+    }
+
+    if let Some(em) = app_for_shutdown.eventsub.as_ref() {
+        tracing::info!("Stopping EventSub...");
+        em.stop().await;
     }
 
     Ok(())

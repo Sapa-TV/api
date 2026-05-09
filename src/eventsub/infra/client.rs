@@ -52,7 +52,17 @@ impl TwitchApiClient {
     }
 
     pub async fn get_broadcaster_id(&self) -> Option<String> {
-        None
+        let token_record = self
+            .token_manager
+            .get_token(ProviderVariant::Twitch, AccountVariant::Main)
+            .await
+            .ok()?;
+
+        match &token_record.token {
+            crate::token_manager::domain::enums::TokenEnum::Twitch { user_id, .. } => {
+                Some(user_id.clone())
+            }
+        }
     }
 
     pub async fn create_eventsub_subscription<E: EventSubscription + Send>(
