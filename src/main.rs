@@ -159,9 +159,15 @@ async fn main() -> AppResult<()> {
         axum::serve(listener, app_router).await.unwrap();
     };
 
+    let shutdown_tx = shutdown_tx;
+    let app_for_shutdown = app_for_shutdown;
+
     tokio::select! {
         _ = server => {
             tracing::info!("Server stopped");
+        }
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("Ctrl+C received");
         }
     }
 
