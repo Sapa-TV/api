@@ -15,7 +15,7 @@ pub struct HealthResponse {
         (status = 200, body = HealthResponse, description = "Health check")
     )
 )]
-pub async fn health() -> axum::Json<HealthResponse> {
+pub async fn get_health() -> axum::Json<HealthResponse> {
     axum::Json(HealthResponse {
         status: "ok".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),

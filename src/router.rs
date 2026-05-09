@@ -9,7 +9,7 @@ use utoipa_redoc::{Redoc, Servable};
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::app::app::App;
-use crate::health::{HealthResponse, health};
+use crate::health::*;
 use crate::oauth::api::*;
 use crate::push::api::*;
 use crate::supporters::api::*;
@@ -22,8 +22,8 @@ use crate::supporters::api::*;
         (name = "Push", description = "Web Push notifications"),
         (name = "OAuth", description = "Provider OAuth authorization")
     ),
-    paths(crate::health::health, get_king_supporter, post_king_supporter, get_month_supporters, post_month_supporter, get_day_supporters, post_day_supporter, post_subscription, delete_subscription, get_vapid_public_key, test_push_all, get_oauth_url, oauth_callback),
-    components(schemas(crate::health::HealthResponse, SupporterResponse, SupportersResponse, SupporterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse, PushTestRequest, PushTestResponse, OAuthUrlResponse, OAuthCallbackResponse, OAuthCallbackParams)),
+    paths(get_health, get_king_supporter, post_king_supporter, get_month_supporters, post_month_supporter, get_day_supporters, post_day_supporter, post_subscription, delete_subscription, get_vapid_public_key, test_push_all, get_oauth_url, oauth_callback),
+    components(schemas(HealthResponse, SupporterResponse, SupportersResponse, SupporterRequest, PushSubscriptionRequest, PushSubscriptionResponse, PushKeys, VapidPublicKeyResponse, PushTestRequest, PushTestResponse, OAuthUrlResponse, OAuthCallbackResponse, OAuthCallbackParams)),
     info(
         title = "api",
         version = "v0",
@@ -35,7 +35,7 @@ pub struct ApiDoc;
 
 pub fn router(app: Arc<App>) -> Router {
     Router::new()
-        .route("/api/health", get(health))
+        .route("/api/health", get(get_health))
         .route(
             "/api/supporters/king",
             get(get_king_supporter).post(post_king_supporter),

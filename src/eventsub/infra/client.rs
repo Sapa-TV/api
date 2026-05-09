@@ -36,6 +36,7 @@ impl TwitchApiClient {
             .token_manager
             .exchange_token(ProviderVariant::Twitch, AccountVariant::Main, code)
             .await?;
+        #[allow(irrefutable_let_patterns)]
         if let crate::token_manager::domain::enums::TokenEnum::Twitch { .. } = token_enum {
             Ok(true)
         } else {

@@ -2,7 +2,6 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::error::AppResult;
-use crate::state::domain::StateRepository;
 use crate::supporters::domain::SupporterRepository;
 
 #[derive(Clone)]
