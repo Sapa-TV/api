@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use twitch_api::twitch_oauth2::{AccessToken, ClientSecret, RefreshToken, UserToken};
 use twitch_api::{HelixClient, eventsub::EventSubscription};
 
 use crate::error::{AppError, AppResult};
@@ -10,6 +11,8 @@ use crate::token_manager::domain::types::{AccountVariant, ProviderVariant};
 pub struct TwitchApiClient {
     helix: Arc<HelixClient<'static, reqwest::Client>>,
     token_manager: Arc<TokenManager>,
+    client_id: String,
+    client_secret: String,
     needs_reauth: AtomicBool,
 }
 
@@ -17,10 +20,14 @@ impl TwitchApiClient {
     pub fn new(
         helix: Arc<HelixClient<'static, reqwest::Client>>,
         token_manager: Arc<TokenManager>,
+        client_id: String,
+        client_secret: String,
     ) -> Self {
         Self {
             helix,
             token_manager,
+            client_id,
+            client_secret,
             needs_reauth: AtomicBool::new(false),
         }
     }
@@ -72,7 +79,31 @@ impl TwitchApiClient {
     }
 
     async fn get_token(&self) -> Option<Arc<twitch_api::twitch_oauth2::UserToken>> {
-        None
+        let token_record = self
+            .token_manager
+            .ensure_active_token(ProviderVariant::Twitch, AccountVariant::Main)
+            .await
+            .ok()?;
+
+        match &token_record.token {
+            crate::token_manager::domain::enums::TokenEnum::Twitch {
+                access_token,
+                refresh_token,
+                ..
+            } => {
+                let http_client = reqwest::Client::new();
+                let token = UserToken::from_existing(
+                    &http_client,
+                    AccessToken::new(access_token.clone()),
+                    refresh_token.clone().map(RefreshToken::new),
+                    ClientSecret::new(self.client_secret.clone()),
+                )
+                .await
+                .ok()?;
+                self.needs_reauth.store(false, Ordering::Relaxed);
+                Some(Arc::new(token))
+            }
+        }
     }
 
     pub fn needs_reauth(&self) -> bool {

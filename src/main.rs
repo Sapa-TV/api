@@ -26,6 +26,7 @@ use std::sync::Arc;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 use crate::token_manager::infra::sqlite::SqliteTokenRepository;
+use crate::token_manager::infra::twitch_provider::TwitchTokenProvider;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
@@ -56,6 +57,14 @@ async fn main() -> AppResult<()> {
         token_repo,
     ));
 
+    let twitch_provider = Arc::new(TwitchTokenProvider::from_env()?);
+    token_manager
+        .register_provider(
+            crate::token_manager::domain::types::ProviderVariant::Twitch,
+            twitch_provider.clone(),
+        )
+        .await;
+
     let state_cache = Arc::new(InMemoryStateRepository::new());
     let cached_supporters = Arc::new(CachedSupportersService::new(
         state_cache,
@@ -76,6 +85,8 @@ async fn main() -> AppResult<()> {
     let twitch_api_client = Arc::new(crate::eventsub::infra::client::TwitchApiClient::new(
         Arc::new(twitch_api::HelixClient::new()),
         token_manager.clone(),
+        twitch_provider.client_id().to_string(),
+        twitch_provider.client_secret().to_string(),
     ));
 
     let app: App = App::builder()
