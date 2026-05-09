@@ -1,18 +1,16 @@
-use std::sync::Arc;
-
 use chrono::{DateTime, Utc};
+use sqlx::SqlitePool;
 
 use crate::auth::domain::{AdminSessionInfo, AdminSessionRepository};
 use crate::error::AppResult;
-use crate::shared_infra::sqlite_db::SqliteDb;
 
 #[derive(Clone)]
 pub struct SqliteAdminSessionRepository {
-    db: Arc<SqliteDb>,
+    db: SqlitePool,
 }
 
 impl SqliteAdminSessionRepository {
-    pub fn new(db: Arc<SqliteDb>) -> Self {
+    pub fn new(db: SqlitePool) -> Self {
         Self { db }
     }
 }
@@ -35,7 +33,7 @@ impl AdminSessionRepository for SqliteAdminSessionRepository {
         .bind(provider_id)
         .bind(username)
         .bind(expires_at.to_rfc3339())
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await?;
         Ok(())
     }
@@ -45,7 +43,7 @@ impl AdminSessionRepository for SqliteAdminSessionRepository {
             "SELECT provider, provider_id, username FROM admin_sessions WHERE id = ? AND expires_at > datetime('now')",
         )
         .bind(id)
-        .fetch_optional(self.db.pool())
+        .fetch_optional(&self.db)
         .await?;
         Ok(
             result.map(|(provider, provider_id, username)| AdminSessionInfo {
@@ -59,14 +57,14 @@ impl AdminSessionRepository for SqliteAdminSessionRepository {
     async fn delete_admin_session(&self, id: &str) -> AppResult<()> {
         sqlx::query("DELETE FROM admin_sessions WHERE id = ?")
             .bind(id)
-            .execute(self.db.pool())
+            .execute(&self.db)
             .await?;
         Ok(())
     }
 
     async fn clean_expired_admin_sessions(&self) -> AppResult<()> {
         sqlx::query("DELETE FROM admin_sessions WHERE expires_at <= datetime('now')")
-            .execute(self.db.pool())
+            .execute(&self.db)
             .await?;
         Ok(())
     }

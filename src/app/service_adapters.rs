@@ -1,51 +1,12 @@
-pub use crate::oauth::infra::TwitchOAuthService;
-
 use std::sync::Arc;
 
-use crate::app::ports::{OAuthService, PushService, SupportersService};
+use crate::app::ports::{PushService, SupportersService};
 use crate::error::AppResult;
 use crate::push::domain::PushSubscription;
 use crate::push::domain::PushSubscriptionRepository;
 use crate::state::domain::StateRepository;
 use crate::state::infra::in_memory::InMemoryStateRepository;
 use crate::supporters::domain::SupporterRepository;
-
-pub struct SqliteSupporterService {
-    repo: Arc<dyn SupporterRepository>,
-}
-
-impl SqliteSupporterService {
-    pub fn new(repo: Arc<dyn SupporterRepository>) -> Self {
-        Self { repo }
-    }
-}
-
-#[async_trait::async_trait]
-impl SupportersService for SqliteSupporterService {
-    async fn get_king(&self) -> AppResult<Option<String>> {
-        self.repo.get_king().await
-    }
-
-    async fn set_king(&self, name: &str) -> AppResult<()> {
-        self.repo.insert_king(name).await
-    }
-
-    async fn get_day_supporters(&self) -> AppResult<Vec<String>> {
-        self.repo.get_day_supporters().await
-    }
-
-    async fn add_day_supporter(&self, name: &str) -> AppResult<()> {
-        self.repo.insert_day_supporter(name).await
-    }
-
-    async fn get_month_supporters(&self) -> AppResult<Vec<String>> {
-        self.repo.get_month_supporters().await
-    }
-
-    async fn add_month_supporter(&self, name: &str) -> AppResult<()> {
-        self.repo.insert_month_supporter(name).await
-    }
-}
 
 pub struct CachedSupportersService {
     cache: Arc<InMemoryStateRepository>,

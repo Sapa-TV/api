@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
 use chrono::{DateTime, Utc};
+use sqlx::SqlitePool;
 
 use crate::error::{AppError, AppResult};
-use crate::shared_infra::sqlite_db::SqliteDb;
 use crate::token_manager::domain::enums::TokenEnum;
 use crate::token_manager::domain::types::{AccountVariant, ProviderVariant};
 use crate::token_manager::domain::{TokenRecord, TokenRepository};
@@ -50,11 +48,11 @@ impl TryFrom<TokenRecordRow> for TokenRecord {
 
 #[derive(Clone)]
 pub struct SqliteTokenRepository {
-    db: Arc<SqliteDb>,
+    db: SqlitePool,
 }
 
 impl SqliteTokenRepository {
-    pub fn new(db: Arc<SqliteDb>) -> Self {
+    pub fn new(db: SqlitePool) -> Self {
         Self { db }
     }
 }
@@ -71,7 +69,7 @@ impl TokenRepository for SqliteTokenRepository {
         )
         .bind(&account_variant)
         .bind(&provider)
-        .fetch_optional(self.db.pool())
+        .fetch_optional(&self.db)
         .await?;
 
         match result {
@@ -101,7 +99,7 @@ impl TokenRepository for SqliteTokenRepository {
         .bind(provider_id)
         .bind(expires_at)
         .bind(raw_data)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await?;
         Ok(())
     }

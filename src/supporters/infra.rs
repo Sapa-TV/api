@@ -1,16 +1,15 @@
-use std::sync::Arc;
+use sqlx::SqlitePool;
 
 use crate::error::AppResult;
-use crate::shared_infra::sqlite_db::SqliteDb;
 use crate::supporters::domain::{SupporterRepository, SupporterRepositoryData};
 
 #[derive(Clone)]
 pub struct SqliteSupporterRepository {
-    db: Arc<SqliteDb>,
+    db: SqlitePool,
 }
 
 impl SqliteSupporterRepository {
-    pub fn new(db: Arc<SqliteDb>) -> Self {
+    pub fn new(db: SqlitePool) -> Self {
         Self { db }
     }
 }
@@ -43,7 +42,7 @@ impl SupporterRepository for SqliteSupporterRepository {
     async fn get_king(&self) -> AppResult<Option<String>> {
         let result: Option<(String,)> =
             sqlx::query_as("SELECT name FROM king ORDER BY id DESC LIMIT 1")
-                .fetch_optional(self.db.pool())
+                .fetch_optional(&self.db)
                 .await?;
         Ok(result.map(|(name,)| name))
     }
@@ -51,7 +50,7 @@ impl SupporterRepository for SqliteSupporterRepository {
     async fn insert_king(&self, name: &str) -> AppResult<()> {
         sqlx::query("INSERT INTO king (name) VALUES (?)")
             .bind(name)
-            .execute(self.db.pool())
+            .execute(&self.db)
             .await?;
         Ok(())
     }
@@ -59,7 +58,7 @@ impl SupporterRepository for SqliteSupporterRepository {
     async fn get_day_supporters(&self) -> AppResult<Vec<String>> {
         let results: Vec<(String,)> =
             sqlx::query_as("SELECT name FROM last_day_donaters ORDER BY id DESC LIMIT 10")
-                .fetch_all(self.db.pool())
+                .fetch_all(&self.db)
                 .await?;
         Ok(results.into_iter().map(|(name,)| name).collect())
     }
@@ -67,7 +66,7 @@ impl SupporterRepository for SqliteSupporterRepository {
     async fn insert_day_supporter(&self, name: &str) -> AppResult<()> {
         sqlx::query("INSERT INTO last_day_donaters (name) VALUES (?)")
             .bind(name)
-            .execute(self.db.pool())
+            .execute(&self.db)
             .await?;
         Ok(())
     }
@@ -75,7 +74,7 @@ impl SupporterRepository for SqliteSupporterRepository {
     async fn get_month_supporters(&self) -> AppResult<Vec<String>> {
         let results: Vec<(String,)> =
             sqlx::query_as("SELECT name FROM month_donaters ORDER BY id DESC LIMIT 10")
-                .fetch_all(self.db.pool())
+                .fetch_all(&self.db)
                 .await?;
         Ok(results.into_iter().map(|(name,)| name).collect())
     }
@@ -83,7 +82,7 @@ impl SupporterRepository for SqliteSupporterRepository {
     async fn insert_month_supporter(&self, name: &str) -> AppResult<()> {
         sqlx::query("INSERT INTO month_donaters (name) VALUES (?)")
             .bind(name)
-            .execute(self.db.pool())
+            .execute(&self.db)
             .await?;
         Ok(())
     }

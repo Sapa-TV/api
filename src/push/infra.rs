@@ -1,6 +1,5 @@
-use std::sync::Arc;
-
 use base64ct::{Base64UrlUnpadded, Encoding};
+use sqlx::SqlitePool;
 use web_push_native::{
     Auth, WebPushBuilder, jwt_simple::algorithms::ES256KeyPair, p256::PublicKey,
 };
@@ -8,7 +7,6 @@ use web_push_native::{
 use crate::error::AppResult;
 use crate::push::domain::PushSubscription;
 use crate::push::domain::PushSubscriptionRepository;
-use crate::shared_infra::sqlite_db::SqliteDb;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
@@ -33,11 +31,11 @@ impl From<PushSubscriptionRow> for PushSubscription {
 
 #[derive(Clone)]
 pub struct SqlitePushSubscriptionRepository {
-    db: Arc<SqliteDb>,
+    db: SqlitePool,
 }
 
 impl SqlitePushSubscriptionRepository {
-    pub fn new(db: Arc<SqliteDb>) -> Self {
+    pub fn new(db: SqlitePool) -> Self {
         Self { db }
     }
 }
@@ -58,7 +56,7 @@ impl PushSubscriptionRepository for SqlitePushSubscriptionRepository {
         .bind(p256dh)
         .bind(auth)
         .bind(user_id)
-        .execute(self.db.pool())
+        .execute(&self.db)
         .await?;
         Ok(())
     }
@@ -67,7 +65,7 @@ impl PushSubscriptionRepository for SqlitePushSubscriptionRepository {
         let results = sqlx::query_as::<_, PushSubscriptionRow>(
             "SELECT endpoint, p256dh, auth, user_id FROM push_subscriptions",
         )
-        .fetch_all(self.db.pool())
+        .fetch_all(&self.db)
         .await?;
         Ok(results.into_iter().map(|r| r.into()).collect::<Vec<_>>())
     }
@@ -75,7 +73,7 @@ impl PushSubscriptionRepository for SqlitePushSubscriptionRepository {
     async fn delete_subscription(&self, endpoint: &str) -> AppResult<()> {
         sqlx::query("DELETE FROM push_subscriptions WHERE endpoint = ?")
             .bind(endpoint)
-            .execute(self.db.pool())
+            .execute(&self.db)
             .await?;
         Ok(())
     }

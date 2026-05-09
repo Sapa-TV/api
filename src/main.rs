@@ -3,6 +3,8 @@ mod push;
 mod supporters;
 mod token_manager;
 
+mod db;
+
 // Screaming architecture modules
 mod app;
 mod auth;
@@ -10,75 +12,20 @@ mod eventsub;
 mod health;
 mod oauth;
 mod router;
-mod shared_infra;
 mod state;
 
 use crate::state::infra::in_memory::InMemoryStateRepository;
-use app::app::{App, AppBuilder};
-use app::service_adapters::{
-    CachedSupportersService, SqlitePushService, SqliteSupporterService, TwitchOAuthService,
-};
+use app::app::App;
+use app::service_adapters::{CachedSupportersService, SqlitePushService};
 use dotenvy::dotenv;
 use error::AppResult;
 use router::router;
 use rustls::crypto::CryptoProvider;
-use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-use crate::shared_infra::sqlite_db::SqliteDb;
 use crate::token_manager::infra::sqlite::SqliteTokenRepository;
-
-pub struct InitDbData {
-    pub king: String,
-    pub day_supporters: Vec<String>,
-    pub month_supporters: Vec<String>,
-}
-
-impl InitDbData {
-    pub fn new() -> Self {
-        Self {
-            king: "Star".to_string(),
-            day_supporters: vec![],
-            month_supporters: vec![],
-        }
-    }
-}
-
-impl SqliteDb {
-    pub async fn init(&self, data: InitDbData) -> AppResult<()> {
-        use crate::supporters::domain::{SupporterRepository, SupporterRepositoryData};
-
-        let supporters_data = SupporterRepositoryData {
-            king: data.king,
-            day_supporters: data.day_supporters,
-            month_supporters: data.month_supporters,
-        };
-
-        // For now, just verify the db is connected
-        tracing::info!("Database initialized");
-        Ok(())
-    }
-}
-
-async fn create_db() -> AppResult<SqliteDb> {
-    use sqlx::sqlite::SqliteConnectOptions;
-    use std::env;
-    use std::str::FromStr;
-
-    let db_url = env::var("DATABASE_URL")?;
-    tracing::info!("Connecting to database at {}", db_url);
-
-    let connection_options = SqliteConnectOptions::from_str(&db_url)?
-        .create_if_missing(true)
-        .foreign_keys(true);
-
-    let pool = SqlitePool::connect_with(connection_options).await?;
-    sqlx::migrate!("./migrations").run(&pool).await?;
-
-    Ok(SqliteDb::new(pool))
-}
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
@@ -96,9 +43,7 @@ async fn main() -> AppResult<()> {
     println!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     println!("Commit: {}", env!("GIT_HASH"));
 
-    let db = Arc::new(create_db().await?);
-    let init_db_data = InitDbData::new();
-    db.init(init_db_data).await?;
+    let db = crate::db::create_db_pool().await?;
 
     let supporters_repo = Arc::new(crate::supporters::infra::SqliteSupporterRepository::new(
         db.clone(),
@@ -136,7 +81,7 @@ async fn main() -> AppResult<()> {
     let app: App = App::builder()
         .supporters(cached_supporters)
         .push(Arc::new(SqlitePushService::new(push_repo)))
-        .oauth(Arc::new(TwitchOAuthService::new(twitch_api_client.clone())))
+        .oauth(twitch_api_client)
         .token_manager(token_manager)
         .push_client(push_client)
         .build();
