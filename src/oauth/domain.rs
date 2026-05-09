@@ -1,9 +1,19 @@
+use async_trait::async_trait;
+
+use crate::error::AppResult;
+
 pub struct OAuthCallbackResult {
     pub success: bool,
 }
 
-#[async_trait::async_trait]
+#[async_trait]
 pub trait OAuthService: Send + Sync {
-    async fn get_auth_url(&self) -> crate::error::AppResult<String>;
-    async fn handle_callback(&self, code: &str) -> crate::error::AppResult<bool>;
+    async fn get_auth_url(&self) -> AppResult<String>;
+    async fn handle_callback(&self, code: &str) -> AppResult<bool>;
+}
+
+#[async_trait]
+pub trait OAuthApiClient: Send + Sync {
+    async fn get_oauth_url(&self) -> AppResult<String>;
+    async fn exchange_code(&self, code: &str) -> AppResult<bool>;
 }

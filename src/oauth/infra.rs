@@ -1,15 +1,14 @@
 use std::sync::Arc;
 
 use crate::error::AppResult;
-use crate::eventsub::domain::TwitchApiClientTrait;
-use crate::oauth::domain::OAuthService;
+use crate::oauth::domain::{OAuthApiClient, OAuthService};
 
 pub struct TwitchOAuthService {
-    client: Arc<dyn TwitchApiClientTrait>,
+    client: Arc<dyn OAuthApiClient>,
 }
 
 impl TwitchOAuthService {
-    pub fn new(client: Arc<dyn TwitchApiClientTrait>) -> Self {
+    pub fn new(client: Arc<dyn OAuthApiClient>) -> Self {
         Self { client }
     }
 }

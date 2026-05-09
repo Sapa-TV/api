@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use twitch_api::{HelixClient, eventsub::EventSubscription};
 
 use crate::error::{AppError, AppResult};
-use crate::eventsub::domain::TwitchApiClientTrait;
+use crate::oauth::domain::OAuthApiClient;
 use crate::token_manager::application::TokenManagerS;
 use crate::token_manager::domain::types::{AccountVariant, ProviderVariant};
 
@@ -84,7 +84,7 @@ impl TwitchApiClient {
 }
 
 #[async_trait::async_trait]
-impl TwitchApiClientTrait for TwitchApiClient {
+impl OAuthApiClient for TwitchApiClient {
     async fn get_oauth_url(&self) -> AppResult<String> {
         self.get_oauth_url().await
     }
