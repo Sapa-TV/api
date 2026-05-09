@@ -1,13 +1,13 @@
 use sqlx::prelude::Type;
 
-#[derive(Type, Hash, PartialEq, Eq, Clone)]
+#[derive(Type, Hash, PartialEq, Eq, Clone, Debug)]
 #[sqlx(type_name = "text")]
 #[sqlx(rename_all = "lowercase")]
 pub enum ProviderVariant {
     Twitch,
 }
 
-#[derive(Type, Hash, PartialEq, Eq, Clone)]
+#[derive(Type, Hash, PartialEq, Eq, Clone, Debug)]
 #[sqlx(type_name = "text")]
 #[sqlx(rename_all = "lowercase")]
 pub enum AccountVariant {

@@ -109,6 +109,8 @@ impl TokenProvider for TwitchTokenProvider {
             ("redirect_uri", self.redirect_uri.as_str()),
         ];
 
+        tracing::info!("Exchanging OAuth code for access token");
+
         let resp = self
             .http_client
             .post(TWITCH_TOKEN_URL)
@@ -131,27 +133,47 @@ impl TokenProvider for TwitchTokenProvider {
             .await
             .map_err(|e| AppError::Internal(format!("Failed to parse token response: {}", e)))?;
 
+        tracing::debug!(
+            "Token response received, expires_in={}",
+            token_resp.expires_in
+        );
+
         let user_id = self.get_user_id(&token_resp.access_token).await?;
 
         let expires_at = chrono::Utc::now().timestamp() + token_resp.expires_in as i64;
 
-        Ok(TokenEnum::Twitch {
+        let token_enum = TokenEnum::Twitch {
             access_token: token_resp.access_token,
             refresh_token: token_resp.refresh_token,
             expires_at: Some(expires_at),
+            user_id: user_id.clone(),
+        };
+
+        tracing::info!(
+            "OAuth exchange successful: user_id={}, expires_at={}",
             user_id,
-        })
+            expires_at
+        );
+
+        Ok(token_enum)
     }
 
     async fn validate_refresh_token(&self, token: &TokenRecord) -> AppResult<TokenEnum> {
         match &token.token {
             TokenEnum::Twitch { expires_at, .. } => {
+                let now = chrono::Utc::now().timestamp();
                 if let Some(exp) = expires_at {
-                    let now = chrono::Utc::now().timestamp();
                     if now < *exp - 300 {
+                        tracing::debug!("Token still valid, expires_at={}", exp);
                         return Ok(token.token.clone());
                     }
+                    tracing::debug!(
+                        "Token expired or near expiry, expires_at={}, now={}",
+                        exp,
+                        now
+                    );
                 }
+                tracing::info!("Refreshing token (force_refresh_token)");
                 self.force_refresh_token(token).await
             }
         }
@@ -178,6 +200,8 @@ impl TokenProvider for TwitchTokenProvider {
             ("grant_type", "refresh_token"),
             ("refresh_token", &refresh_token),
         ];
+
+        tracing::info!("Refreshing OAuth token");
 
         let resp = self
             .http_client
@@ -209,11 +233,19 @@ impl TokenProvider for TwitchTokenProvider {
 
         let new_refresh_token = refresh_resp.refresh_token.or(Some(refresh_token));
 
-        Ok(TokenEnum::Twitch {
+        let token_enum = TokenEnum::Twitch {
             access_token: refresh_resp.access_token,
             refresh_token: new_refresh_token,
             expires_at: Some(expires_at),
+            user_id: user_id.clone(),
+        };
+
+        tracing::info!(
+            "Token refresh successful: user_id={}, expires_at={}",
             user_id,
-        })
+            expires_at
+        );
+
+        Ok(token_enum)
     }
 }

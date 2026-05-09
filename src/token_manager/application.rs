@@ -88,7 +88,7 @@ impl TokenManager {
                     let new_token_record = TokenRecord {
                         account_variant: account.clone(),
                         provider: provider.clone(),
-                        token: new_token_enum,
+                        token: new_token_enum.clone(),
                     };
                     let mut tokens = self.tokens.write().await;
                     tokens.insert(
@@ -98,6 +98,7 @@ impl TokenManager {
                     return Ok(new_token_record);
                 }
                 Err(_) => {
+                    tracing::debug!("Token validation failed, attempting refresh");
                     return self.refresh_token(provider, account).await;
                 }
             }
@@ -115,7 +116,31 @@ impl TokenManager {
 
         let provider_instance = self.get_provider(provider.clone()).await;
         if let Some(provider_instance) = provider_instance {
+            let old_user_id = match &token.token {
+                TokenEnum::Twitch { user_id, .. } => user_id.clone(),
+            };
+
+            tracing::info!(
+                "Refreshing token: provider={:?}, account={:?}, user_id={}",
+                provider,
+                account,
+                old_user_id
+            );
+
             let new_token_enum = provider_instance.force_refresh_token(&token).await?;
+            let new_user_id = match &new_token_enum {
+                TokenEnum::Twitch { user_id, .. } => user_id.clone(),
+            };
+            let new_expires_at = match &new_token_enum {
+                TokenEnum::Twitch { expires_at, .. } => expires_at,
+            };
+
+            tracing::info!(
+                "Token refreshed: user_id={}, new_expires_at={:?}",
+                new_user_id,
+                new_expires_at
+            );
+
             let new_token_record = TokenRecord {
                 account_variant: account.clone(),
                 provider: provider.clone(),
@@ -152,7 +177,24 @@ impl TokenManager {
             .await
             .ok_or_else(|| AppError::Internal("Provider not found".to_string()))?;
 
+        tracing::debug!(
+            "Exchanging code for token: provider={:?}, account={:?}",
+            provider,
+            account
+        );
+
         let token_enum = provider_instance.exchange_token(code).await?;
+
+        let user_id = match &token_enum {
+            TokenEnum::Twitch { user_id, .. } => user_id.clone(),
+        };
+
+        tracing::info!(
+            "Token exchanged, saving to repository: provider={:?}, account={:?}, user_id={}",
+            provider,
+            account,
+            user_id
+        );
 
         let token_record = TokenRecord {
             account_variant: account.clone(),
@@ -171,8 +213,10 @@ impl TokenManager {
             .await?;
 
         let mut tokens = self.tokens.write().await;
-        tokens.insert((provider, account), token_record);
+        tokens.insert((provider.clone(), account.clone()), token_record);
         let _ = self.token_change_tx.send(());
+
+        tracing::info!("Token saved to cache and repository");
 
         Ok(token_enum)
     }
