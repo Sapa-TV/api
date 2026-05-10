@@ -28,7 +28,7 @@ impl EventSubClient {
         }
     }
 
-    pub async fn run(&self, mut shutdown: broadcast::Receiver<()>) -> Result<(), AppError> {
+    pub async fn run(&self, mut shutdown: broadcast::Receiver<()>) -> AppResult<()> {
         loop {
             tracing::info!("Connecting to Twitch EventSub WebSocket...");
 
@@ -52,12 +52,12 @@ impl EventSubClient {
         Ok(())
     }
 
-    async fn connect_and_handle(&self) -> Result<(), AppError> {
+    async fn connect_and_handle(&self) -> AppResult<()> {
         let (ws_stream, _) = connect_async(TWITCH_EVENTSUB_WS_URL)
             .await
             .map_err(|e| AppError::Internal(format!("Failed to connect to EventSub: {}", e)))?;
 
-        let (mut write, mut read) = ws_stream.split();
+        let (_, mut read) = ws_stream.split();
         let mut session_id: Option<String> = None;
         let mut last_message_time: Option<std::time::Instant> = None;
         let mut keepalive_timeout = std::time::Duration::from_secs(30);
@@ -66,31 +66,36 @@ impl EventSubClient {
             tokio::select! {
                 msg = read.next() => {
                     match msg {
-                        Some(Ok(Message::Text(text))) => {
-                            last_message_time = Some(std::time::Instant::now());
+                        Some(Ok(msg)) => match msg {
+                            Message::Text(text) => {
+                                last_message_time = Some(std::time::Instant::now());
 
-                            let parsed = match Event::parse_websocket(&text) {
-                                Ok(p) => p,
-                                Err(e) => {
-                                    tracing::error!("Failed to parse EventSub message: {}. Raw: {}", e, text);
-                                    continue;
-                                }
-                            };
+                                let parsed = match Event::parse_websocket(&text) {
+                                    Ok(p) => p,
+                                    Err(e) => {
+                                        tracing::error!("Failed to parse EventSub message: {}. Raw: {}", e, text);
+                                        continue;
+                                    }
+                                };
 
-                            if let EventsubWebsocketData::Welcome { payload, .. } = &parsed {
-                                if let Some(timeout) = payload.session.keepalive_timeout_seconds {
-                                    keepalive_timeout = std::time::Duration::from_secs((timeout * 2) as u64);
-                                    tracing::info!("Keepalive timeout set to {} seconds (2x multiplier)", timeout * 2);
+                                if let EventsubWebsocketData::Welcome { payload, .. } = &parsed {
+                                    if let Some(timeout) = payload.session.keepalive_timeout_seconds {
+                                        keepalive_timeout = std::time::Duration::from_secs((timeout * 2) as u64);
+                                        tracing::info!("Keepalive timeout set to {} seconds (2x multiplier)", timeout * 2);
+                                    }
                                 }
+
+                                self.handle_message_impl(parsed, &mut session_id, &mut last_message_time).await?;
                             }
-
-                            self.handle_message_impl(parsed, &mut session_id, &mut last_message_time, &mut write).await?;
-                        }
-                        Some(Ok(Message::Ping(_))) => {
-                        }
-                        Some(Ok(Message::Close(close_frame))) => {
-                            tracing::info!("WebSocket closed: {:?}", close_frame);
-                            break;
+                            Message::Ping(_) => {
+                            }
+                            Message::Close(close_frame) => {
+                                tracing::info!("WebSocket closed: {:?}", close_frame);
+                                break;
+                            }
+                            _ => {
+                                tracing::warn!("Unexpected WebSocket message: {:?}", msg);
+                            }
                         }
                         Some(Err(e)) => {
                             tracing::error!("WebSocket error: {:?}", e);
@@ -100,7 +105,6 @@ impl EventSubClient {
                             tracing::info!("WebSocket stream ended");
                             break;
                         }
-                        _ => {}
                     }
                 }
                 _ = tokio::time::sleep(keepalive_timeout) => {
@@ -117,17 +121,12 @@ impl EventSubClient {
         Ok(())
     }
 
-    async fn handle_message_impl<S>(
+    async fn handle_message_impl(
         &self,
         parsed: EventsubWebsocketData<'_>,
         session_id: &mut Option<String>,
         last_message_time: &mut Option<std::time::Instant>,
-        _write: &mut S,
-    ) -> Result<(), AppError>
-    where
-        S: Sink<Message> + Unpin,
-        S::Error: std::fmt::Debug,
-    {
+    ) -> AppResult<()> {
         tracing::debug!("EventSub message type: {:?}", parsed);
 
         match parsed {
@@ -169,6 +168,7 @@ impl EventSubClient {
                 metadata: _,
                 payload,
             } => {
+                // TODO: need add reconnect flow
                 tracing::warn!("Reconnect requested by Twitch");
                 if let Some(url) = &payload.session.reconnect_url {
                     tracing::info!("Will reconnect to: {}", url);
@@ -191,8 +191,9 @@ impl EventSubClient {
     }
 
     async fn handle_notification(&self, event: Event) -> AppResult<()> {
+        // TODO: sub_type need to be enum discriminant, not full type
         let sub_type = format!("{:?}", event);
-        tracing::info!("EventSub notification: type={}", sub_type);
+        tracing::info!("EventSub notification type: {}", sub_type);
 
         tracing::debug!(
             "Event data: {}",
@@ -229,7 +230,7 @@ impl EventSubClient {
         &self,
         session_id: &str,
         broadcaster_user_id: &str,
-    ) -> Result<(), AppError> {
+    ) -> AppResult<()> {
         tracing::info!(
             "Creating stream.online subscription: broadcaster_id={}",
             broadcaster_user_id
@@ -251,7 +252,7 @@ impl EventSubClient {
         &self,
         session_id: &str,
         broadcaster_user_id: &str,
-    ) -> Result<(), AppError> {
+    ) -> AppResult<()> {
         tracing::info!(
             "Creating stream.offline subscription: broadcaster_id={}",
             broadcaster_user_id
@@ -273,7 +274,7 @@ impl EventSubClient {
         &self,
         session_id: &str,
         broadcaster_user_id: &str,
-    ) -> Result<(), AppError> {
+    ) -> AppResult<()> {
         tracing::info!(
             "Creating chat.message subscription: broadcaster_id={}",
             broadcaster_user_id,

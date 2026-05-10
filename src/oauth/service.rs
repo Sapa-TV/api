@@ -2,10 +2,6 @@ use async_trait::async_trait;
 
 use crate::error::AppResult;
 
-pub struct OAuthCallbackResult {
-    pub success: bool,
-}
-
 #[async_trait]
 pub trait OAuthService: Send + Sync {
     async fn get_auth_url(&self) -> AppResult<String>;

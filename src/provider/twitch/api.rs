@@ -64,7 +64,7 @@ impl TwitchApiClient {
         &self,
         subscription: E,
         transport: twitch_api::eventsub::Transport,
-    ) -> Result<String, AppError> {
+    ) -> AppResult<String> {
         let token = self
             .get_token()
             .await
