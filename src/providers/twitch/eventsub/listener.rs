@@ -1,5 +1,5 @@
 use chrono::Utc;
-use futures_util::{Sink, StreamExt};
+use futures_util::StreamExt;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -10,29 +10,34 @@ use twitch_api::eventsub::stream::online::StreamOnlineV1;
 use twitch_api::eventsub::{Event, EventsubWebsocketData};
 
 use crate::error::{AppError, AppResult};
-use crate::provider::twitch::api::TwitchApiClient;
-use crate::provider::twitch::eventsub::manager::TwitchLifecycle;
+use crate::event_bus::{
+    ChatMessage, ControlEvent, Event as BusEvent, EventBus, StreamEvent, StreamStatus,
+};
+use crate::providers::twitch::api::TwitchApiClient;
+use crate::token::types::ProviderVariant;
 
 const TWITCH_EVENTSUB_WS_URL: &str = "wss://eventsub.wss.twitch.tv/ws";
 
-pub struct EventSubClient {
+pub struct TwitchEventSubClient {
     api_client: Arc<TwitchApiClient>,
-    lifecycle: Arc<TwitchLifecycle>,
+    event_bus: Arc<EventBus>,
 }
 
-impl EventSubClient {
-    pub fn new(api_client: Arc<TwitchApiClient>, lifecycle: Arc<TwitchLifecycle>) -> Self {
+impl TwitchEventSubClient {
+    pub fn new(api_client: Arc<TwitchApiClient>, event_bus: Arc<EventBus>) -> Self {
         Self {
             api_client,
-            lifecycle,
+            event_bus,
         }
     }
 
     pub async fn run(&self, mut shutdown: broadcast::Receiver<()>) -> AppResult<()> {
-        loop {
-            tracing::info!("Connecting to Twitch EventSub WebSocket...");
+        let url = TWITCH_EVENTSUB_WS_URL.to_string();
 
-            match self.connect_and_handle().await {
+        loop {
+            tracing::info!("Connecting to Twitch EventSub WebSocket: {}", url);
+
+            match self.connect_and_handle(&url).await {
                 Ok(()) => {
                     tracing::info!("EventSub WebSocket connection closed normally");
                     break;
@@ -52,8 +57,8 @@ impl EventSubClient {
         Ok(())
     }
 
-    async fn connect_and_handle(&self) -> AppResult<()> {
-        let (ws_stream, _) = connect_async(TWITCH_EVENTSUB_WS_URL)
+    async fn connect_and_handle(&self, url: &str) -> AppResult<()> {
+        let (ws_stream, _) = connect_async(url)
             .await
             .map_err(|e| AppError::Internal(format!("Failed to connect to EventSub: {}", e)))?;
 
@@ -168,12 +173,15 @@ impl EventSubClient {
                 metadata: _,
                 payload,
             } => {
-                // TODO: need add reconnect flow
                 tracing::warn!("Reconnect requested by Twitch");
                 if let Some(url) = &payload.session.reconnect_url {
                     tracing::info!("Will reconnect to: {}", url);
+                    self.event_bus.publish(BusEvent::Control(ControlEvent {
+                        provider: ProviderVariant::Twitch,
+                        reconnect_url: Some(url.to_string()),
+                        disconnect_code: None,
+                    }));
                 }
-                return Err(AppError::Internal("Reconnect requested".to_string()));
             }
             EventsubWebsocketData::Revocation {
                 metadata: _,
@@ -191,7 +199,6 @@ impl EventSubClient {
     }
 
     async fn handle_notification(&self, event: Event) -> AppResult<()> {
-        // TODO: sub_type need to be enum discriminant, not full type
         let sub_type = format!("{:?}", event);
         tracing::info!("EventSub notification type: {}", sub_type);
 
@@ -202,22 +209,28 @@ impl EventSubClient {
 
         match event {
             Event::StreamOnlineV1(_payload) => {
-                let timestamp = Utc::now();
-                self.lifecycle.on_stream_started(timestamp).await?;
+                self.event_bus.publish(BusEvent::Stream(StreamEvent {
+                    provider: ProviderVariant::Twitch,
+                    status: StreamStatus::Started,
+                    timestamp: Utc::now(),
+                }));
             }
             Event::StreamOfflineV1(_payload) => {
-                let timestamp = Utc::now();
-                self.lifecycle.on_stream_ended(timestamp).await?;
+                self.event_bus.publish(BusEvent::Stream(StreamEvent {
+                    provider: ProviderVariant::Twitch,
+                    status: StreamStatus::Ended,
+                    timestamp: Utc::now(),
+                }));
             }
             Event::ChannelChatMessageV1(payload) => {
                 if let twitch_api::eventsub::Message::Notification(event) = &payload.message {
-                    let user_id = event.chatter_user_id.as_str();
-                    let username = event.chatter_user_name.as_str();
-                    let message = event.message.text.as_str();
-                    let timestamp = Utc::now();
-                    self.lifecycle
-                        .on_chat_message(user_id, username, message, timestamp)
-                        .await?;
+                    self.event_bus.publish(BusEvent::Chat(ChatMessage {
+                        provider: ProviderVariant::Twitch,
+                        user_id: event.chatter_user_id.to_string(),
+                        username: event.chatter_user_name.to_string(),
+                        message: event.message.text.to_string(),
+                        timestamp: Utc::now(),
+                    }));
                 }
             }
             _ => {}
@@ -294,17 +307,5 @@ impl EventSubClient {
         tracing::info!("Subscribed to channel.chat.message: id={}", subscription_id);
 
         Ok(())
-    }
-}
-
-pub async fn start_eventsub_task(
-    api_client: Arc<TwitchApiClient>,
-    lifecycle: Arc<TwitchLifecycle>,
-    shutdown: broadcast::Receiver<()>,
-) {
-    let client = EventSubClient::new(api_client, lifecycle);
-
-    if let Err(e) = client.run(shutdown).await {
-        tracing::error!("EventSub task error: {:?}", e);
     }
 }

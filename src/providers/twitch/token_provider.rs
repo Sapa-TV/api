@@ -44,10 +44,6 @@ impl TwitchTokenProvider {
         Ok(Self::new(client_id, client_secret, redirect_uri))
     }
 
-    pub fn client_id(&self) -> &str {
-        &self.client_id
-    }
-
     pub fn client_secret(&self) -> &str {
         &self.client_secret
     }
