@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use crate::app::ports::{PushService, SupportersService};
 use crate::error::AppResult;
-use crate::push::domain::PushSubscription;
-use crate::push::domain::PushSubscriptionRepository;
-use crate::state::domain::StateRepository;
-use crate::state::infra::in_memory::InMemoryStateRepository;
-use crate::supporters::domain::SupporterRepository;
+use crate::push::subscription::PushSubscription;
+use crate::push::subscription::PushSubscriptionRepository;
+use crate::state::in_memory_repository::InMemoryStateRepository;
+use crate::state::repository::StateRepository;
+use crate::supporters::repository::SupporterRepository;
 
 pub struct CachedSupportersService {
     cache: Arc<InMemoryStateRepository>,
@@ -14,6 +14,7 @@ pub struct CachedSupportersService {
 }
 
 impl CachedSupportersService {
+    // TODO: check is cache fulfilled at start?
     pub fn new(cache: Arc<InMemoryStateRepository>, repo: Arc<dyn SupporterRepository>) -> Self {
         Self { cache, repo }
     }
@@ -23,7 +24,7 @@ impl CachedSupportersService {
 impl SupportersService for CachedSupportersService {
     async fn get_king(&self) -> AppResult<Option<String>> {
         let cached = self.cache.get_king().await?;
-        if cached.is_some() && !cached.as_ref().unwrap().is_empty() {
+        if cached.is_some() {
             return Ok(cached);
         }
         let from_db = self.repo.get_king().await?;
@@ -34,7 +35,7 @@ impl SupportersService for CachedSupportersService {
     }
 
     async fn set_king(&self, name: &str) -> AppResult<()> {
-        self.repo.insert_king(name).await?;
+        self.repo.set_king(name).await?;
         self.cache.set_king(name).await?;
         Ok(())
     }

@@ -9,10 +9,10 @@ use utoipa_redoc::{Redoc, Servable};
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::app::app::App;
-use crate::health::*;
-use crate::oauth::api::*;
-use crate::push::api::*;
-use crate::supporters::api::*;
+use crate::health::api_handlers::*;
+use crate::oauth::api_handlers::*;
+use crate::push::api_handlers::*;
+use crate::supporters::api_handlers::*;
 
 #[derive(OpenApi)]
 #[openapi(

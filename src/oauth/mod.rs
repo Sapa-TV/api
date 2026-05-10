@@ -1,2 +1,2 @@
-pub mod api;
-pub mod domain;
+pub mod api_handlers;
+pub mod service;

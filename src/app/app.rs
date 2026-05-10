@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use crate::app::ports::{OAuthService, PushService, SupportersService};
-use crate::eventsub::application::EventSubManager;
-use crate::push::infra::PushClient;
-use crate::token_manager::application::TokenManager;
+use crate::provider::twitch::eventsub::manager::EventSubManager;
+use crate::push::web_push_client::WebPushClient;
+use crate::token::manager::TokenManager;
 
 pub struct App {
     pub supporters: Arc<dyn SupportersService>,
     pub push: Arc<dyn PushService>,
     pub oauth: Arc<dyn OAuthService>,
     pub token_manager: Arc<TokenManager>,
-    pub push_client: Arc<PushClient>,
+    pub push_client: Arc<WebPushClient>,
     pub eventsub: Option<Arc<EventSubManager>>,
 }
 
@@ -25,7 +25,7 @@ pub struct AppBuilder {
     push: Option<Arc<dyn PushService>>,
     oauth: Option<Arc<dyn OAuthService>>,
     token_manager: Option<Arc<TokenManager>>,
-    push_client: Option<Arc<PushClient>>,
+    push_client: Option<Arc<WebPushClient>>,
     eventsub: Option<Arc<EventSubManager>>,
 }
 
@@ -61,7 +61,7 @@ impl AppBuilder {
         self
     }
 
-    pub fn push_client(mut self, c: Arc<PushClient>) -> Self {
+    pub fn push_client(mut self, c: Arc<WebPushClient>) -> Self {
         self.push_client = Some(c);
         self
     }

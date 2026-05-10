@@ -1,20 +1,21 @@
+mod database;
+
 mod error;
 mod push;
 mod supporters;
-mod token_manager;
 
-mod db;
-
-// Screaming architecture modules
 mod app;
-mod auth;
-mod eventsub;
 mod health;
 mod oauth;
+mod provider;
 mod router;
 mod state;
+mod token;
 
-use crate::state::infra::in_memory::InMemoryStateRepository;
+use crate::provider::twitch::api::TwitchApiClient;
+use crate::provider::twitch::eventsub::manager::EventSubManager;
+use crate::provider::twitch::token_provider::TwitchTokenProvider;
+use crate::state::in_memory_repository::InMemoryStateRepository;
 use app::app::App;
 use app::service_adapters::{CachedSupportersService, SqlitePushService};
 use dotenvy::dotenv;
@@ -25,8 +26,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-use crate::token_manager::infra::sqlite::SqliteTokenRepository;
-use crate::token_manager::infra::twitch_provider::TwitchTokenProvider;
+use crate::token::manager::TokenManager;
+use crate::token::sqlite_repository::SqliteTokenRepository;
 
 #[tokio::main]
 async fn main() -> AppResult<()> {
@@ -44,23 +45,19 @@ async fn main() -> AppResult<()> {
     println!("{} v{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
     println!("Commit: {}", env!("GIT_HASH"));
 
-    let db = crate::db::create_db_pool().await?;
+    let db = crate::database::sqlite_pool::create_db_pool().await?;
 
-    let supporters_repo = Arc::new(crate::supporters::infra::SqliteSupporterRepository::new(
-        db.clone(),
-    ));
-    let push_repo = Arc::new(crate::push::infra::SqlitePushSubscriptionRepository::new(
-        db.clone(),
-    ));
+    let supporters_repo =
+        Arc::new(crate::supporters::sqlite_repository::SqliteSupporterRepository::new(db.clone()));
+    let push_repo =
+        Arc::new(crate::push::sqlite_repository::SqlitePushSubscriptionRepository::new(db.clone()));
     let token_repo = Arc::new(SqliteTokenRepository::new(db.clone()));
-    let token_manager = Arc::new(crate::token_manager::application::TokenManager::new(
-        token_repo,
-    ));
+    let token_manager = Arc::new(TokenManager::new(token_repo));
 
     let twitch_provider = Arc::new(TwitchTokenProvider::from_env()?);
     token_manager
         .register_provider(
-            crate::token_manager::domain::types::ProviderVariant::Twitch,
+            crate::token::types::ProviderVariant::Twitch,
             twitch_provider.clone(),
         )
         .await;
@@ -73,36 +70,38 @@ async fn main() -> AppResult<()> {
         supporters_repo.clone(),
     ));
 
-    let push_client = match crate::push::infra::PushClient::from_env() {
+    let push_client = match crate::push::web_push_client::WebPushClient::from_env() {
         Some(c) => Arc::new(c),
         None => {
-            tracing::warn!("PushClient not initialized - VAPID keys not configured");
+            tracing::warn!("WebPushClient not initialized - VAPID keys not configured");
             Arc::new(
-                crate::push::infra::PushClient::new("placeholder", "mailto:placeholder")
-                    .expect("hardcoded"),
+                crate::push::web_push_client::WebPushClient::new(
+                    "placeholder",
+                    "mailto:placeholder",
+                )
+                .expect("hardcoded"),
             )
         }
     };
 
-    let twitch_api_client = Arc::new(crate::eventsub::infra::client::TwitchApiClient::new(
+    let twitch_api_client = Arc::new(TwitchApiClient::new(
         Arc::new(twitch_api::HelixClient::new()),
         token_manager.clone(),
         twitch_provider.client_secret().to_string(),
     ));
 
-    let lifecycle = Arc::new(crate::eventsub::application::TwitchLifecycle::new(
-        Arc::new(crate::eventsub::application::TwitchStreamLifecycleAdapter),
-        Arc::new(crate::eventsub::application::TwitchChatHandlerAdapter),
-    ));
-    let eventsub_manager = Arc::new(crate::eventsub::application::EventSubManager::new(
-        twitch_api_client.clone(),
-        lifecycle,
-    ));
+    let lifecycle = Arc::new(
+        crate::provider::twitch::eventsub::manager::TwitchLifecycle::new(
+            Arc::new(crate::provider::twitch::eventsub::manager::TwitchStreamLifecycleAdapter),
+            Arc::new(crate::provider::twitch::eventsub::manager::TwitchChatHandlerAdapter),
+        ),
+    );
+    let eventsub_manager = Arc::new(EventSubManager::new(twitch_api_client.clone(), lifecycle));
 
     let has_main_token = token_manager
         .get_token(
-            crate::token_manager::domain::types::ProviderVariant::Twitch,
-            crate::token_manager::domain::types::AccountVariant::Main,
+            crate::token::types::ProviderVariant::Twitch,
+            crate::token::types::AccountVariant::Main,
         )
         .await
         .is_ok();

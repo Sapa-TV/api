@@ -22,9 +22,11 @@ pub enum AppError {
     #[error("Environment variable error: {0}")]
     EnvVar(#[from] VarError),
 
+    #[allow(dead_code)]
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 
+    #[allow(dead_code)]
     #[error("Forbidden: {0}")]
     Forbidden(String),
 
