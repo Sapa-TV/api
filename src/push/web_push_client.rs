@@ -3,15 +3,15 @@ use web_push_native::{
     Auth, WebPushBuilder, jwt_simple::algorithms::ES256KeyPair, p256::PublicKey,
 };
 
-use crate::db::PushSubscription;
+use crate::push::subscription::PushSubscription;
 
-pub struct PushClient {
+pub struct WebPushClient {
     client: reqwest::Client,
     key_pair: ES256KeyPair,
     contact: String,
 }
 
-impl PushClient {
+impl WebPushClient {
     pub fn from_env() -> Option<Self> {
         let private_key = std::env::var("VAPID_PRIVATE_KEY").ok()?;
         let contact = std::env::var("VAPID_CONTACT").ok()?;
@@ -27,7 +27,7 @@ impl PushClient {
             .build()
             .ok()?;
 
-        tracing::info!("PushClient initialized with contact: {}", contact);
+        tracing::info!("WebPushClient initialized with contact: {}", contact);
 
         Some(Self {
             client,

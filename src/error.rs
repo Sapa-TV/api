@@ -1,3 +1,5 @@
+use std::env::VarError;
+
 use axum::{
     Json,
     http::StatusCode,
@@ -17,11 +19,21 @@ pub enum AppError {
     #[error("Environment variable error: {0}")]
     Env(String),
 
+    #[error("Environment variable error: {0}")]
+    EnvVar(#[from] VarError),
+
+    #[allow(dead_code)]
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 
-    #[error("Internal server error: {0}")]
     #[allow(dead_code)]
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
+    #[error("Parsing JSON error: {0}")]
+    Parsing(#[from] serde_json::Error),
+
+    #[error("Internal server error: {0}")]
     Internal(String),
 }
 
@@ -47,9 +59,21 @@ impl IntoResponse for AppError {
                 tracing::error!("Environment error: {}", msg);
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
+            AppError::EnvVar(msg) => {
+                tracing::error!("Environment error: {}", msg);
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
+            }
             AppError::Unauthorized(msg) => {
                 tracing::warn!("Unauthorized: {}", msg);
-                (StatusCode::OK, self.to_string())
+                (StatusCode::UNAUTHORIZED, self.to_string())
+            }
+            AppError::Forbidden(msg) => {
+                tracing::warn!("Forbidden: {}", msg);
+                (StatusCode::FORBIDDEN, self.to_string())
+            }
+            AppError::Parsing(msg) => {
+                tracing::warn!("Parsing error: {}", msg);
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);

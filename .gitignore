@@ -2,3 +2,4 @@
 /generated/
 /db/
 .env
+src/bin/research.rs
