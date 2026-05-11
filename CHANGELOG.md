@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [0.4.0](https://github.com/Sapa-TV/api/compare/4cca7877a06d49738788776e60f419ce7ab02439..0.4.0) - 2026-05-11
+#### Features
+- add eventbus, refactor to clean-screaming arch - ([4cca787](https://github.com/Sapa-TV/api/commit/4cca7877a06d49738788776e60f419ce7ab02439)) - Th0rN13
+
+- - -
+
 ## [0.3.0](https://github.com/Sapa-TV/api/compare/e2040c4ef8f29fc1c0e470df11743c66a450840a..0.3.0) - 2026-04-29
 #### Features
 - add user_id verify - ([e2040c4](https://github.com/Sapa-TV/api/commit/e2040c4ef8f29fc1c0e470df11743c66a450840a)) - Th0rN13
