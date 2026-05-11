@@ -230,6 +230,7 @@ impl TokenManager {
         provider_instance.generate_url()
     }
 
+    // TODO: use eventbus for send token changes
     pub fn subscribe_token_changes(&self) -> broadcast::Receiver<()> {
         self.token_change_tx.subscribe()
     }

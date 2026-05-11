@@ -31,7 +31,8 @@ pub struct ControlEvent {
     pub disconnect_code: Option<u16>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, strum::EnumDiscriminants)]
+#[strum_discriminants(derive(Hash))]
 pub enum Event {
     Chat(ChatMessage),
     Stream(StreamEvent),

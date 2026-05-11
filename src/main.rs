@@ -27,7 +27,6 @@ use crate::providers::twitch::{
     api::TwitchApiClient, eventsub::listener::TwitchEventSubClient,
     token_provider::TwitchTokenProvider,
 };
-use crate::reactors::{ChatReactor, StreamReactor};
 use crate::state::in_memory_repository::InMemoryStateRepository;
 use crate::token::{
     manager::TokenManager,
@@ -68,9 +67,6 @@ async fn main() -> AppResult<()> {
             twitch_provider.clone(),
         )
         .await;
-
-    // TODO: кто должен использовать shutdown_rx?
-    let (shutdown_tx, _shutdown_rx) = tokio::sync::broadcast::channel::<()>(1);
 
     let state_cache = Arc::new(InMemoryStateRepository::new());
     let cached_supporters = Arc::new(CachedSupportersService::new(
@@ -125,22 +121,12 @@ async fn main() -> AppResult<()> {
     let app = Arc::new(app);
     let app_router = router(app.clone());
 
-    let chat_reactor = ChatReactor::new();
-    let stream_reactor = StreamReactor::new();
-    let event_bus_for_reactors = event_bus.clone();
-
-    // TODO: должен быть отдельный общий реактор, который маршрутизирует события
-    let _chat_handle = tokio::spawn(async move {
-        chat_reactor.run(event_bus_for_reactors.subscribe()).await;
-    });
-    let _stream_handle = tokio::spawn(async move {
-        stream_reactor.run(event_bus.subscribe()).await;
-    });
+    crate::reactors::register(&event_bus);
 
     let (event_sub_shutdown_tx, event_sub_shutdown_rx) = tokio::sync::broadcast::channel::<()>(1);
     let eventsub_client_clone = eventsub_client.clone();
 
-    let _eventsub_handle = tokio::spawn(async move {
+    let eventsub_handle = tokio::spawn(async move {
         if let Err(e) = eventsub_client_clone.run(event_sub_shutdown_rx).await {
             tracing::error!("EventSub task error: {:?}", e);
         }
@@ -168,9 +154,9 @@ async fn main() -> AppResult<()> {
     }
 
     tracing::info!("Shutting down...");
-    let _ = shutdown_tx.send(());
     let _ = event_sub_shutdown_tx.send(());
-    _eventsub_handle.abort();
+    eventsub_handle.abort();
+    event_bus.shutdown().await;
 
     Ok(())
 }

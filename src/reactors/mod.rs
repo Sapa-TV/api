@@ -1,5 +1,7 @@
 pub mod chat;
 pub mod stream;
 
-pub use chat::ChatReactor;
-pub use stream::StreamReactor;
+pub fn register(bus: &crate::event_bus::EventBus) {
+    chat::register(bus);
+    stream::register(bus);
+}
