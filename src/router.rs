@@ -8,7 +8,7 @@ use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::app::app::App;
+use crate::app::App;
 use crate::health::api_handlers::*;
 use crate::oauth::api_handlers::*;
 use crate::push::api_handlers::*;

@@ -12,7 +12,7 @@ mod state;
 mod supporters;
 mod token;
 
-use app::app::App;
+use app::App;
 use app::service_adapters::{CachedSupportersService, SqlitePushService};
 use dotenvy::dotenv;
 use error::AppResult;

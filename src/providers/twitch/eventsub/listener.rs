@@ -4,10 +4,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use twitch_api::eventsub::channel::chat::message::ChannelChatMessageV1;
-use twitch_api::eventsub::stream::offline::StreamOfflineV1;
-use twitch_api::eventsub::stream::online::StreamOnlineV1;
-use twitch_api::eventsub::{Event, EventsubWebsocketData};
+use twitch_api::eventsub::{
+    Event, EventsubWebsocketData, channel::chat::message::ChannelChatMessageV1,
+    stream::offline::StreamOfflineV1, stream::online::StreamOnlineV1,
+};
 
 use crate::error::{AppError, AppResult};
 use crate::event_bus::{
@@ -43,12 +43,15 @@ impl TwitchEventSubClient {
                     break;
                 }
                 Err(e) => {
+                    // TODO: Add  Exponential Backoff for the next connection attempt
+                    // TODO: use sequence: 0, 1, 2, 4, 8, 15, 30, 60 and then try reconnect each 60 seconds
                     tracing::error!("EventSub WebSocket error: {:?}", e);
                     tracing::info!("Reconnecting in 5 seconds...");
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             }
 
+            // TODO: use eventbus for shutdown
             if shutdown.try_recv().is_ok() {
                 tracing::info!("Received shutdown signal for EventSub");
                 break;

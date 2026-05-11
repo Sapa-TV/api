@@ -77,6 +77,7 @@ impl TwitchTokenProvider {
 
 #[async_trait::async_trait]
 impl TokenProvider for TwitchTokenProvider {
+    // TODO: use twitch_oauth instead a manual implementation
     fn generate_url(&self) -> AppResult<String> {
         let scopes = SCOPES.join(" ");
         let url = format!(

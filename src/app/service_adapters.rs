@@ -13,6 +13,7 @@ pub struct CachedSupportersService {
     repo: Arc<dyn SupporterRepository>,
 }
 
+// TODO: move to supporters module
 impl CachedSupportersService {
     // TODO: check is cache fulfilled at start?
     pub fn new(cache: Arc<InMemoryStateRepository>, repo: Arc<dyn SupporterRepository>) -> Self {
@@ -42,6 +43,7 @@ impl SupportersService for CachedSupportersService {
 
     async fn get_day_supporters(&self) -> AppResult<Vec<String>> {
         let cached = self.cache.get_day_supporters().await?;
+        // TODO: cache CAN be empty, but we should check if it's fulfilled
         if !cached.is_empty() {
             return Ok(cached);
         }
@@ -60,6 +62,7 @@ impl SupportersService for CachedSupportersService {
 
     async fn get_month_supporters(&self) -> AppResult<Vec<String>> {
         let cached = self.cache.get_month_supporters().await?;
+        // TODO: cache CAN be empty, but we should check if it's fulfilled
         if !cached.is_empty() {
             return Ok(cached);
         }

@@ -2,7 +2,7 @@ use axum::{Json, extract::Extension};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::app::app::App;
+use crate::app::App;
 use crate::error::{AppError, AppResult};
 
 #[derive(Deserialize, utoipa::ToSchema)]
